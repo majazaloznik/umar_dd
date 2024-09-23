@@ -17,10 +17,10 @@ get_db_connection <- function() {
 
 # User authentication (simplified for example)
 user_base <- data.frame(
-        user_id = c(1, 2, 3),
-        user = c("user1", "user2", "hr1"),
-        password = c("pass1", "pass2", "hrpass"),
-        permissions = c("employee", "employee", "hr"),
+        user_id = c(1, 2, 3, 4, 5, 6),
+        user = c("user1", "user2", "user4", "hr1", "user5",  "user6"),
+        password = c("pass1", "pass2", "pass4", "hrpass", "pass5", "pass6"),
+        permissions = c("employee", "employee", "hr", "employee","employee", "employee"),
         stringsAsFactors = FALSE
 )
 
@@ -99,7 +99,8 @@ server <- function(input, output, session) {
                                  uiOutput("calculatedWorkTime"),
                                  textAreaInput("tasks", "Tasks Accomplished", value = "", rows = 5),
                                  textAreaInput("notes", "Additional Notes", value = "", rows = 3),
-                                 actionButton("submit", "Submit/Update Entry")
+                                 actionButton("submit", "Submit/Update Entry"),
+                                 actionButton("clear", "Clear Form") 
                         ),
                         tabPanel("View Submissions",
                                  selectInput("selectDate", "Select Date", choices = NULL),
@@ -195,7 +196,7 @@ server <- function(input, output, session) {
         # Clear form when credentials change (i.e., on login)
         observeEvent(credentials(), {
                 if (!is.null(credentials())) {
-                        clearForm(session)
+                        clearForm(session, setDefaultDate = TRUE)
                 }
         })
         
@@ -224,6 +225,9 @@ server <- function(input, output, session) {
                 }
         })
         
+        observeEvent(input$clear, {
+                clearForm(session, setDefaultDate = TRUE)
+        })
         
         # Define a function to insert or update an entry
         insertEntry <- function() {
@@ -294,7 +298,7 @@ server <- function(input, output, session) {
                         entry_update(entry_update() + 1)  # Trigger update of View/Edit tab
                         
                         # Clear the form
-                        clearForm(session)
+                        clearForm(session, setDefaultDate = TRUE)
                         
                         # Reset the calculated work time
                         session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
@@ -383,7 +387,7 @@ server <- function(input, output, session) {
                 } else {
                         if (update_form) {
                                 # Clear the form if no entry is found
-                                clearForm(session)
+                                clearForm(session, setDefaultDate = TRUE)
                         }
                         
                         NULL
@@ -391,8 +395,12 @@ server <- function(input, output, session) {
         }
         
         # Add a new function to clear the form
-        clearForm <- function(session) {
-                updateDateInput(session, "date", value = NULL)
+        clearForm <- function(session, setDefaultDate = FALSE) {
+                if (setDefaultDate) {
+                        updateDateInput(session, "date", value = Sys.Date())
+                } else {
+                        updateDateInput(session, "date", value = NULL)
+                }
                 updateTextInput(session, "startTime", value = "")
                 updateTextInput(session, "endTime", value = "")
                 updateTextInput(session, "breakStart", value = "")
