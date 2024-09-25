@@ -4,6 +4,7 @@ library(shiny)
 library(DBI)
 library(RPostgres)
 library(lubridate)
+library(shinyTime)
 
 # Database connection function
 get_db_connection <- function() {
@@ -47,7 +48,16 @@ ui <- fluidPage(
         uiOutput("loginUI"),
         
         # Main app UI
-        uiOutput("mainUI")
+        uiOutput("mainUI"),
+        
+        # version number
+        tags$footer(
+                tags$hr(), # Optional: adds a horizontal line above the version text
+                tags$p(
+                        "App Version: 0.2.0", 
+                        style = "text-align: center; font-size: 0.8em; color: #888;"
+                )
+        )
 )
 
 server <- function(input, output, session) {
@@ -65,7 +75,7 @@ server <- function(input, output, session) {
                                 actionButton("login", "Log In")
                         )
                 } else {
-                        actionButton("logout", "Log Out")
+                        actionButton("logout", "Odjava")
                 }
         })
         
@@ -90,54 +100,69 @@ server <- function(input, output, session) {
                 req(credentials())
                 
                 tabsetPanel(id = "tabs",
-                        tabPanel("Submit/Edit Entry",
-                                 dateInput("date", "Date", value = NULL),
-                                 textInput("startTime", "Start Time (HH:MM)", value = ""),
-                                 textInput("endTime", "End Time (HH:MM)", value = ""),
-                                 textInput("breakStart", "Break Start (HH:MM, optional)", value = ""),
-                                 textInput("breakEnd", "Break End (HH:MM, optional)", value = ""),
-                                 uiOutput("calculatedWorkTime"),
-                                 textAreaInput("tasks", "Tasks Accomplished", value = "", rows = 5),
-                                 textAreaInput("notes", "Additional Notes", value = "", rows = 3),
-                                 actionButton("submit", "Submit/Update Entry"),
-                                 actionButton("clear", "Clear Form") 
-                        ),
-                        tabPanel("View Submissions",
-                                 selectInput("selectDate", "Select Date", choices = NULL),
-                                 uiOutput("submissionDetails"),
-                                 uiOutput("entryHistory")
-                        )
+                            tabPanel("Vnos in popravki",
+                                     dateInput("date", "Datum", value = NULL, weekstart = 1),
+                                     timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
+                                     timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE),
+                                     timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
+                                     timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
+                                     uiOutput("calculatedWorkTime"),
+                                     textAreaInput("tasks", "Poročilo o opravljenem delu", value = "", rows = 5),
+                                     textAreaInput("notes", "Dodatne opombe za špico", value = "", rows = 3),
+                                     actionButton("submit", "Oddaj/posodobi"),
+                                     actionButton("clear", "Počisti") 
+                            ),
+                            tabPanel("Vpogled v vnose",
+                                     selectInput("selectDate", "Datum", choices = NULL),
+                                     uiOutput("submissionDetails"),
+                                     uiOutput("entryHistory")
+                            )
                 )
         })
         
         workTimeCalc <- reactive({
-                start_time <- parse_time(input$startTime)
-                end_time <- parse_time(input$endTime)
-                break_start <- parse_time(input$breakStart)
-                break_end <- parse_time(input$breakEnd)
+                # Helper function to extract time from POSIXlt or return NULL if empty
+                extract_time <- function(time_input) {
+                        if (inherits(time_input, "POSIXt")) {
+                                return(time_input)
+                        }
+                        return(NULL)
+                }
                 
-                if (is.na(start_time) || is.na(end_time)) {
+                # Extract times
+                start_time <- extract_time(input$startTime)
+                end_time <- extract_time(input$endTime)
+                break_start <- extract_time(input$breakStart)
+                break_end <- extract_time(input$breakEnd)
+                
+                # If start or end time is not set, return default
+                if (is.null(start_time) || is.null(end_time) || start_time >= end_time) {
                         return(list(time = "-- : --", color = "white"))
                 }
                 
-                total_time <- as.numeric(end_time - start_time, units = "hours")
+                # Calculate total time
+                total_time <- as.numeric(difftime(end_time, start_time, units = "hours"))
                 
-                if (!is.na(break_start) && !is.na(break_end)) {
-                        break_time <- as.numeric(break_end - break_start, units = "hours")
+                # Handle break times if both are set and valid
+                if (!is.null(break_start) && !is.null(break_end) && break_start < break_end) {
+                        break_time <- as.numeric(difftime(break_end, break_start, units = "hours"))
                         total_time <- total_time - break_time
                 }
                 
+                total_hours <- floor(total_time)
+                total_minutes <- round((total_time - total_hours) * 60)
+                
                 color <- if (abs(total_time - 8) < 0.01) "green" else if (total_time < 8) "yellow" else "lightblue"
                 
-                list(time = sprintf("%.2f", total_time), color = color)
+                list(time = sprintf("%02d:%02d", total_hours, total_minutes), color = color)
         })
         
         output$calculatedWorkTime <- renderUI({
                 result <- workTimeCalc()
                 div(
                         style = paste("background-color:", result$color, "; padding: 10px; border-radius: 5px;"),
-                        h4("Calculated Work Time:"),
-                        h3(paste(result$time, "hours"))
+                        h5("Skupna prisotnost:"),
+                        h4(result$time)
                 )
         })
         
@@ -154,7 +179,7 @@ server <- function(input, output, session) {
                 
                 if (nrow(history) > 0) {
                         tagList(
-                                h4("Entry History"),
+                                h4("Zgodovina sprememb"),
                                 lapply(1:nrow(history), function(i) {
                                         status <- if (history$is_current[i]) "Current" else "Previous"
                                         p(paste(status, "version submitted at", history$entry_timestamp[i]))
@@ -163,10 +188,31 @@ server <- function(input, output, session) {
                 }
         })
         
-        # Helper function to convert empty strings to NULL
-        convert_empty_to_null <- function(x) {
-                if (is.character(x) && nchar(trimws(x)) == 0) NULL else x
+        # Helper function to get the date range for allowed entries, excluding weekends
+        get_allowed_date_range <- function() {
+                current_date <- Sys.Date()
+                current_weekday <- as.integer(format(current_date, "%u"))
+                
+                # Calculate the start of the current week (Monday)
+                start_of_week <- current_date - (current_weekday - 1)
+                
+                # If it's Monday or Tuesday, include the previous week
+                if (current_weekday <= 2) {
+                        start_of_previous_week <- start_of_week - 7
+                        start_date <- start_of_previous_week
+                } else {
+                        start_date <- start_of_week
+                }
+                
+                # Generate a vector of all dates in the range
+                all_dates <- seq(start_date, current_date, by = "day")
+                
+                # Filter out weekends
+                workdays <- all_dates[!weekdays(all_dates) %in% c("Saturday", "Sunday")]
+                
+                list(start_date = min(workdays), end_date = max(workdays), allowed_dates = workdays)
         }
+        
         
         # Helper function to validate and format time input
         validate_time <- function(time_str, field_name) {
@@ -177,10 +223,15 @@ server <- function(input, output, session) {
                         return(list(valid = TRUE, message = NULL, value = NULL))
                 }
                 tryCatch({
-                        formatted_time <- format(as.POSIXct(time_str, format = "%H:%M"), "%H:%M:%S")
+                        if (grepl(":", time_str)) {
+                                formatted_time <- format(as.POSIXct(time_str, format = "%H:%M"), "%H:%M:%S")
+                        } else {
+                                formatted_time <- format_time_input(time_str)
+                                formatted_time <- paste0(formatted_time, ":00")
+                        }
                         return(list(valid = TRUE, message = NULL, value = formatted_time))
                 }, error = function(e) {
-                        return(list(valid = FALSE, message = paste(field_name, "must be in HH:MM format."), value = NULL))
+                        return(list(valid = FALSE, message = paste(field_name, "must be in HHMM or HH:MM format."), value = NULL))
                 })
         }
         
@@ -193,6 +244,13 @@ server <- function(input, output, session) {
                 )
         }
         
+        format_time_input <- function(time_str) {
+                if (is.null(time_str) || nchar(trimws(time_str)) == 0) {
+                        return("")
+                }
+                formatted_time <- sprintf("%04d", as.integer(time_str))
+                paste0(substr(formatted_time, 1, 2), ":", substr(formatted_time, 3, 4))
+        }
         # Clear form when credentials change (i.e., on login)
         observeEvent(credentials(), {
                 if (!is.null(credentials())) {
@@ -234,27 +292,34 @@ server <- function(input, output, session) {
                 conn <- get_db_connection()
                 on.exit(dbDisconnect(conn))
                 
-                # Validate and format time inputs
-                start_time <- validate_time(input$startTime, "Start Time")
-                end_time <- validate_time(input$endTime, "End Time")
-                break_start <- validate_time(input$breakStart, "Break Start")
-                break_end <- validate_time(input$breakEnd, "Break End")
+                start_time <- strftime(input$startTime, "%H:%M:%S")
+                end_time <- strftime(input$endTime, "%H:%M:%S")
                 
-                error_messages <- c()
-                if (!start_time$valid) error_messages <- c(error_messages, start_time$message)
-                if (!end_time$valid) error_messages <- c(error_messages, end_time$message)
-                if (!break_start$valid) error_messages <- c(error_messages, break_start$message)
-                if (!break_end$valid) error_messages <- c(error_messages, break_end$message)
-                
-                if (length(error_messages) > 0) {
-                        showModal(modalDialog(
-                                title = "Invalid Input",
-                                HTML(paste(error_messages, collapse = "<br>")),
-                                easyClose = TRUE
-                        ))
-                        return()
+                break_start <- NA
+                break_end <- NA
+                if (!is.null(input$breakStart) && strftime(input$breakStart, "%H:%M:%S") != "00:00:00" &&
+                    !is.null(input$breakEnd) && strftime(input$breakEnd, "%H:%M:%S") != "00:00:00") {
+                        break_start <- strftime(input$breakStart, "%H:%M:%S")
+                        break_end <- strftime(input$breakEnd, "%H:%M:%S")
                 }
+                # calculate working hours
+                total_time <- as.numeric(difftime(as.POSIXct(end_time, format="%H:%M:%S"),
+                                                  as.POSIXct(start_time, format="%H:%M:%S"),
+                                                  units="hours"))
                 
+                # Handle break times if both are set and valid
+                if (!is.na(break_start) && !is.na(break_end) && break_start < break_end) {
+                        break_time <- as.numeric(difftime(as.POSIXct(break_end, format="%H:%M:%S"),
+                                                          as.POSIXct( break_start, format="%H:%M:%S"), 
+                                                          units = "hours"))
+                        total_time <- total_time - break_time
+                }
+                # Format total_time as interval
+                calculated_time <- sprintf("%d hours %d minutes",
+                                           floor(total_time),
+                                           round((total_time - floor(total_time)) * 60))
+                
+                print(total_time)
                 # Start transaction
                 dbExecute(conn, "BEGIN")
                 
@@ -272,17 +337,18 @@ server <- function(input, output, session) {
                 params <- list(
                         credentials()$user_id,
                         as.Date(input$date),
-                        as.character(start_time$value),
-                        as.character(end_time$value),
-                        if (is.null(break_start$value)) NA else as.character(break_start$value),
-                        if (is.null(break_end$value)) NA else as.character(break_end$value),
+                        start_time,
+                        end_time, 
+                        break_start,
+                        break_end,
                         as.character(input$tasks),
-                        as.character(input$notes)
+                        as.character(input$notes),
+                        calculated_time
                 )
                 
                 # Insert new entry
-                insert_query <- "INSERT INTO time_entries (user_id, date, start_time, end_time, break_start, break_end, tasks, notes, is_current, entry_timestamp) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, CURRENT_TIMESTAMP)"
+                insert_query <- "INSERT INTO time_entries (user_id, date, start_time, end_time, break_start, break_end, tasks, notes, is_current, entry_timestamp, calculated_time) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, CURRENT_TIMESTAMP, $9::interval)"
                 
                 result <- tryCatch({
                         dbExecute(conn, insert_query, params)
@@ -325,11 +391,16 @@ server <- function(input, output, session) {
                 conn <- get_db_connection()
                 on.exit(dbDisconnect(conn))
                 
+                date_range <- get_allowed_date_range()
+                
                 query <- "SELECT date 
-            FROM time_entries 
-            WHERE user_id = $1 AND is_current = TRUE
-            ORDER BY date DESC"
-                result <- dbGetQuery(conn, query, list(credentials()$user_id))
+                FROM time_entries 
+                WHERE user_id = $1 
+                AND is_current = TRUE
+                AND date BETWEEN $2 AND $3
+                AND EXTRACT(DOW FROM date) BETWEEN 1 AND 5
+                ORDER BY date DESC"
+                result <- dbGetQuery(conn, query, list(credentials()$user_id, date_range$start_date, date_range$end_date))
                 
                 as.character(result$date)
         })
@@ -340,6 +411,15 @@ server <- function(input, output, session) {
                 updateSelectInput(session, "selectDate", choices = get_user_dates())
         })
         
+        # Update date input on the entry tab
+        observe({
+                req(credentials())
+                date_range <- get_allowed_date_range()
+                updateDateInput(session, "date",
+                                min = date_range$start_date,
+                                max = date_range$end_date)
+        })
+        
         # Display selected submission details
         output$submissionDetails <- renderUI({
                 req(credentials(), input$selectDate)
@@ -347,14 +427,14 @@ server <- function(input, output, session) {
                 
                 if (!is.null(entry)) {
                         tagList(
-                                p(strong("Date:"), entry$date),
-                                p(strong("Start Time:"), entry$start_time),
-                                p(strong("End Time:"), entry$end_time),
-                                p(strong("Break Start:"), entry$break_start),
-                                p(strong("Break End:"), entry$break_end),
-                                p(strong("Tasks:"), entry$tasks),
-                                p(strong("Notes:"), entry$notes),
-                                p(strong("Last Updated:"), entry$entry_timestamp)
+                                p(strong("Datum:"), entry$date),
+                                p(strong("Prihod:"), entry$start_time),
+                                p(strong("Odhod:"), entry$end_time),
+                                p(strong("Privatni izhod:"), entry$break_start),
+                                p(strong("Privatni prihod:"), entry$break_end),
+                                p(strong("Opravljeno delo:"), entry$tasks),
+                                p(strong("Opombe:"), entry$notes),
+                                p(strong("Zadnja posodobitev:"), entry$entry_timestamp)
                         )
                 }
         })
@@ -372,10 +452,14 @@ server <- function(input, output, session) {
                 if (nrow(result) > 0) {
                         if (update_form) {
                                 updateDateInput(session, "date", value = result$date)
-                                updateTextInput(session, "startTime", value = format(result$start_time, "%H:%M"))
-                                updateTextInput(session, "endTime", value = format(result$end_time, "%H:%M"))
-                                updateTextInput(session, "breakStart", value = ifelse(is.na(result$break_start), "", format(result$break_start, "%H:%M")))
-                                updateTextInput(session, "breakEnd", value = ifelse(is.na(result$break_end), "", format(result$break_end, "%H:%M")))
+                                updateTimeInput(session, "startTime", value = result$start_time)
+                                updateTimeInput(session, "endTime", value = result$end_time)
+                                updateTimeInput(session, "breakStart", value = result$break_start)
+                                updateTimeInput(session, "breakEnd", value = result$break_end)
+                                # updateTextInput(session, "startTime", value = format(result$start_time, "%H:%M"))
+                                # updateTextInput(session, "endTime", value = format(result$end_time, "%H:%M"))
+                                # updateTextInput(session, "breakStart", value = ifelse(is.na(result$break_start), "", format(result$break_start, "%H:%M")))
+                                # updateTextInput(session, "breakEnd", value = ifelse(is.na(result$break_end), "", format(result$break_end, "%H:%M")))
                                 updateTextAreaInput(session, "tasks", value = result$tasks)
                                 updateTextAreaInput(session, "notes", value = result$notes)
                                 

@@ -48,7 +48,16 @@ ui <- fluidPage(
         uiOutput("loginUI"),
         
         # Main app UI
-        uiOutput("mainUI")
+        uiOutput("mainUI"),
+        
+        # version number
+        tags$footer(
+                tags$hr(), # Optional: adds a horizontal line above the version text
+                tags$p(
+                        "App Version: 0.2.0", 
+                        style = "text-align: center; font-size: 0.8em; color: #888;"
+                )
+        )
 )
 
 server <- function(input, output, session) {
@@ -66,7 +75,7 @@ server <- function(input, output, session) {
                                 actionButton("login", "Log In")
                         )
                 } else {
-                        actionButton("logout", "Log Out")
+                        actionButton("logout", "Odjava")
                 }
         })
         
@@ -91,10 +100,10 @@ server <- function(input, output, session) {
                 req(credentials())
                 
                 tabsetPanel(id = "tabs",
-                            tabPanel("Submit/Edit Entry",
-                                     dateInput("date", "Datum", value = NULL),
-                                     timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE, minute.steps = 5),
-                                     timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE, minute.steps = 5),
+                            tabPanel("Vnos in popravki",
+                                     dateInput("date", "Datum", value = NULL, weekstart = 1),
+                                     timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
+                                     timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE),
                                      timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
                                      timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
                                      uiOutput("calculatedWorkTime"),
@@ -103,8 +112,8 @@ server <- function(input, output, session) {
                                      actionButton("submit", "Oddaj/posodobi"),
                                      actionButton("clear", "Počisti") 
                             ),
-                            tabPanel("View Submissions",
-                                     selectInput("selectDate", "Select Date", choices = NULL),
+                            tabPanel("Vpogled v vnose",
+                                     selectInput("selectDate", "Datum", choices = NULL),
                                      uiOutput("submissionDetails"),
                                      uiOutput("entryHistory")
                             )
@@ -152,8 +161,8 @@ server <- function(input, output, session) {
                 result <- workTimeCalc()
                 div(
                         style = paste("background-color:", result$color, "; padding: 10px; border-radius: 5px;"),
-                        h4("Calculated Work Time:"),
-                        h3(paste(result$time, "hours"))
+                        h5("Skupna prisotnost:"),
+                        h4(result$time)
                 )
         })
         
@@ -170,7 +179,7 @@ server <- function(input, output, session) {
                 
                 if (nrow(history) > 0) {
                         tagList(
-                                h4("Entry History"),
+                                h4("Zgodovina sprememb"),
                                 lapply(1:nrow(history), function(i) {
                                         status <- if (history$is_current[i]) "Current" else "Previous"
                                         p(paste(status, "version submitted at", history$entry_timestamp[i]))
@@ -179,10 +188,31 @@ server <- function(input, output, session) {
                 }
         })
         
-        # Helper function to convert empty strings to NULL
-        convert_empty_to_null <- function(x) {
-                if (is.character(x) && nchar(trimws(x)) == 0) NULL else x
+        # Helper function to get the date range for allowed entries, excluding weekends
+        get_allowed_date_range <- function() {
+                current_date <- Sys.Date()
+                current_weekday <- as.integer(format(current_date, "%u"))
+                
+                # Calculate the start of the current week (Monday)
+                start_of_week <- current_date - (current_weekday - 1)
+                
+                # If it's Monday or Tuesday, include the previous week
+                if (current_weekday <= 2) {
+                        start_of_previous_week <- start_of_week - 7
+                        start_date <- start_of_previous_week
+                } else {
+                        start_date <- start_of_week
+                }
+                
+                # Generate a vector of all dates in the range
+                all_dates <- seq(start_date, current_date, by = "day")
+                
+                # Filter out weekends
+                workdays <- all_dates[!weekdays(all_dates) %in% c("Saturday", "Sunday")]
+                
+                list(start_date = min(workdays), end_date = max(workdays), allowed_dates = workdays)
         }
+        
         
         # Helper function to validate and format time input
         validate_time <- function(time_str, field_name) {
@@ -361,11 +391,16 @@ server <- function(input, output, session) {
                 conn <- get_db_connection()
                 on.exit(dbDisconnect(conn))
                 
+                date_range <- get_allowed_date_range()
+                
                 query <- "SELECT date 
-            FROM time_entries 
-            WHERE user_id = $1 AND is_current = TRUE
-            ORDER BY date DESC"
-                result <- dbGetQuery(conn, query, list(credentials()$user_id))
+                FROM time_entries 
+                WHERE user_id = $1 
+                AND is_current = TRUE
+                AND date BETWEEN $2 AND $3
+                AND EXTRACT(DOW FROM date) BETWEEN 1 AND 5
+                ORDER BY date DESC"
+                result <- dbGetQuery(conn, query, list(credentials()$user_id, date_range$start_date, date_range$end_date))
                 
                 as.character(result$date)
         })
@@ -376,6 +411,15 @@ server <- function(input, output, session) {
                 updateSelectInput(session, "selectDate", choices = get_user_dates())
         })
         
+        # Update date input on the entry tab
+        observe({
+                req(credentials())
+                date_range <- get_allowed_date_range()
+                updateDateInput(session, "date",
+                                min = date_range$start_date,
+                                max = date_range$end_date)
+        })
+        
         # Display selected submission details
         output$submissionDetails <- renderUI({
                 req(credentials(), input$selectDate)
@@ -383,14 +427,14 @@ server <- function(input, output, session) {
                 
                 if (!is.null(entry)) {
                         tagList(
-                                p(strong("Date:"), entry$date),
-                                p(strong("Start Time:"), entry$start_time),
-                                p(strong("End Time:"), entry$end_time),
-                                p(strong("Break Start:"), entry$break_start),
-                                p(strong("Break End:"), entry$break_end),
-                                p(strong("Tasks:"), entry$tasks),
-                                p(strong("Notes:"), entry$notes),
-                                p(strong("Last Updated:"), entry$entry_timestamp)
+                                p(strong("Datum:"), entry$date),
+                                p(strong("Prihod:"), entry$start_time),
+                                p(strong("Odhod:"), entry$end_time),
+                                p(strong("Privatni izhod:"), entry$break_start),
+                                p(strong("Privatni prihod:"), entry$break_end),
+                                p(strong("Opravljeno delo:"), entry$tasks),
+                                p(strong("Opombe:"), entry$notes),
+                                p(strong("Zadnja posodobitev:"), entry$entry_timestamp)
                         )
                 }
         })
