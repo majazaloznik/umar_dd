@@ -96,7 +96,7 @@ server <- function(input, output, session) {
                                      timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE, minute.steps = 5),
                                      timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE, minute.steps = 5),
                                      timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
-                                     timeInput("breakEnd", "KOnec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
+                                     timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
                                      uiOutput("calculatedWorkTime"),
                                      textAreaInput("tasks", "Poročilo o opravljenem delu", value = "", rows = 5),
                                      textAreaInput("notes", "Dodatne opombe za špico", value = "", rows = 3),
@@ -112,25 +112,30 @@ server <- function(input, output, session) {
         })
         
         workTimeCalc <- reactive({
-                start_time <- input$startTime
-                end_time <- input$endTime
-                break_start <- input$breakStart
-                break_end <- input$breakEnd
+                # Helper function to extract time from POSIXlt or return NULL if empty
+                extract_time <- function(time_input) {
+                        if (inherits(time_input, "POSIXt")) {
+                                return(time_input)
+                        }
+                        return(NULL)
+                }
                 
-                if (is.null(start_time) || is.null(end_time)) {
+                # Extract times
+                start_time <- extract_time(input$startTime)
+                end_time <- extract_time(input$endTime)
+                break_start <- extract_time(input$breakStart)
+                break_end <- extract_time(input$breakEnd)
+                
+                # If start or end time is not set, return default
+                if (is.null(start_time) || is.null(end_time) || start_time >= end_time) {
                         return(list(time = "-- : --", color = "white"))
                 }
                 
-                if (start_time >= end_time) {
-                        return(list(time = "-- : --", color = "white"))
-                }
-                
+                # Calculate total time
                 total_time <- as.numeric(difftime(end_time, start_time, units = "hours"))
                 
-                if (!is.null(break_start) && !is.null(break_end)) {
-                        if (break_start >= break_end) {
-                                return(list(time = sprintf("%02d:%02d", floor(total_time), round((total_time - floor(total_time)) * 60)), color = if (abs(total_time - 8) < 0.01) "green" else if (total_time < 8) "yellow" else "lightblue"))
-                        }
+                # Handle break times if both are set and valid
+                if (!is.null(break_start) && !is.null(break_end) && break_start < break_end) {
                         break_time <- as.numeric(difftime(break_end, break_start, units = "hours"))
                         total_time <- total_time - break_time
                 }
@@ -142,7 +147,6 @@ server <- function(input, output, session) {
                 
                 list(time = sprintf("%02d:%02d", total_hours, total_minutes), color = color)
         })
-        
         
         output$calculatedWorkTime <- renderUI({
                 result <- workTimeCalc()
@@ -258,25 +262,15 @@ server <- function(input, output, session) {
                 conn <- get_db_connection()
                 on.exit(dbDisconnect(conn))
                 
-                # Validate and format time inputs
-                start_time <- validate_time(input$startTime, "Start Time")
-                end_time <- validate_time(input$endTime, "End Time")
-                break_start <- validate_time(input$breakStart, "Break Start")
-                break_end <- validate_time(input$breakEnd, "Break End")
+                start_time <- strftime(input$startTime, "%H:%M:%S")
+                end_time <- strftime(input$endTime, "%H:%M:%S")
                 
-                error_messages <- c()
-                if (!start_time$valid) error_messages <- c(error_messages, start_time$message)
-                if (!end_time$valid) error_messages <- c(error_messages, end_time$message)
-                if (!break_start$valid) error_messages <- c(error_messages, break_start$message)
-                if (!break_end$valid) error_messages <- c(error_messages, break_end$message)
-                
-                if (length(error_messages) > 0) {
-                        showModal(modalDialog(
-                                title = "Invalid Input",
-                                HTML(paste(error_messages, collapse = "<br>")),
-                                easyClose = TRUE
-                        ))
-                        return()
+                break_start <- NA
+                break_end <- NA
+                if (!is.null(input$breakStart) && strftime(input$breakStart, "%H:%M:%S") != "00:00:00" &&
+                    !is.null(input$breakEnd) && strftime(input$breakEnd, "%H:%M:%S") != "00:00:00") {
+                        break_start <- strftime(input$breakStart, "%H:%M:%S")
+                        break_end <- strftime(input$breakEnd, "%H:%M:%S")
                 }
                 
                 # Start transaction
@@ -296,10 +290,10 @@ server <- function(input, output, session) {
                 params <- list(
                         credentials()$user_id,
                         as.Date(input$date),
-                        format(input$startTime, "%H:%M:%S"),
-                        format(input$endTime, "%H:%M:%S"),
-                        if (is.na(input$breakStart)) NA else format(input$breakStart, "%H:%M:%S"),
-                        if (is.na(input$breakEnd)) NA else format(input$breakEnd, "%H:%M:%S"),
+                        start_time,
+                        end_time, 
+                        break_start,
+                        break_end,
                         as.character(input$tasks),
                         as.character(input$notes)
                 )
