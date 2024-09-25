@@ -272,7 +272,24 @@ server <- function(input, output, session) {
                         break_start <- strftime(input$breakStart, "%H:%M:%S")
                         break_end <- strftime(input$breakEnd, "%H:%M:%S")
                 }
+                # calculate working hours
+                total_time <- as.numeric(difftime(as.POSIXct(end_time, format="%H:%M:%S"),
+                                                  as.POSIXct(start_time, format="%H:%M:%S"),
+                                                  units="hours"))
                 
+                # Handle break times if both are set and valid
+                if (!is.na(break_start) && !is.na(break_end) && break_start < break_end) {
+                        break_time <- as.numeric(difftime(as.POSIXct(break_end, format="%H:%M:%S"),
+                                                          as.POSIXct( break_start, format="%H:%M:%S"), 
+                                                          units = "hours"))
+                        total_time <- total_time - break_time
+                }
+                # Format total_time as interval
+                calculated_time <- sprintf("%d hours %d minutes",
+                                           floor(total_time),
+                                           round((total_time - floor(total_time)) * 60))
+                
+                print(total_time)
                 # Start transaction
                 dbExecute(conn, "BEGIN")
                 
@@ -295,12 +312,13 @@ server <- function(input, output, session) {
                         break_start,
                         break_end,
                         as.character(input$tasks),
-                        as.character(input$notes)
+                        as.character(input$notes),
+                        calculated_time
                 )
                 
                 # Insert new entry
-                insert_query <- "INSERT INTO time_entries (user_id, date, start_time, end_time, break_start, break_end, tasks, notes, is_current, entry_timestamp) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, CURRENT_TIMESTAMP)"
+                insert_query <- "INSERT INTO time_entries (user_id, date, start_time, end_time, break_start, break_end, tasks, notes, is_current, entry_timestamp, calculated_time) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, CURRENT_TIMESTAMP, $9::interval)"
                 
                 result <- tryCatch({
                         dbExecute(conn, insert_query, params)
