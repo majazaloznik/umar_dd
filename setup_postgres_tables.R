@@ -24,6 +24,7 @@ create_table_sql <- 'CREATE TABLE time_entries (
         break_start TIME,
         break_end TIME,
         caclulated_time INTERVAL,
+        lunch BOOLEAN,
         tasks TEXT NOT NULL,
         notes TEXT,
         is_current BOOLEAN DEFAULT TRUE,
