@@ -28,17 +28,28 @@ authenticate <- function(user, password) {
         conn <- get_db_connection()
         on.exit(dbDisconnect(conn))
         
-        query <- "SELECT id, username, contract_type FROM employees WHERE username = $1 AND password = $2"
+        query <- "SELECT id, username, contract_type, access FROM employees WHERE username = $1 AND password = $2"
         result <- dbGetQuery(conn, query, list(user, password))
         
         if (nrow(result) == 1) {
-                list(user_auth = TRUE, user = result$username, user_id = result$id, permissions = result$contract_type)
+                list(user_auth = TRUE, 
+                     user = result$username, 
+                     user_id = result$id, 
+                     contract_type = result$contract_type,
+                     permissions = result$access)
         } else {
                 list(user_auth = FALSE)
         }
 }
 
 ui <- fluidPage(
+        tags$head(
+                tags$style(HTML("
+            .shiny-input-container {margin-bottom: 10px;}
+            #submit, #clear {margin-top: 10px;}
+            #calculatedWorkTime {margin-bottom: 20px;}
+        "))
+        ),
         tags$script("
         Shiny.addCustomMessageHandler('triggerWorkTimeCalc', function(message) {
             Shiny.setInputValue('startTime', $('#startTime').val(), {priority: 'event'});
@@ -87,7 +98,7 @@ server <- function(input, output, session) {
                 user_credentials <- authenticate(input$username, input$password)
                 if (user_credentials$user_auth) {
                         credentials(user_credentials)
-                        just_logged_in(TRUE)  # Set this to TRUE when user logs in
+                        just_logged_in(TRUE)  
                 } else {
                         showNotification("Invalid username or password", type = "error")
                 }
@@ -120,29 +131,39 @@ server <- function(input, output, session) {
                 tabsetPanel(
                         tabPanel("Vnos in popravki",
                                  fluidRow(
-                                         column(6,
-                                                dateInput("date", "Datum", value = Sys.Date(), weekstart = 1, format = "dd-mm-yyyy", daysofweekdisabled = c(0, 6)),
-                                                timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
-                                                timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE),
-                                                timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
-                                                timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
-                                                uiOutput("calculatedWorkTime"),
-                                                checkboxInput("lunch", "Malica", value = TRUE),
-                                                textAreaInput("tasks", "Poročilo o opravljenem delu", value = "", rows = 5),
-                                                textAreaInput("notes", "Dodatne opombe za špico", value = "", rows = 3),
-                                                actionButton("submit", "Oddaj/posodobi"),
-                                                actionButton("clear", "Počisti")
+                                         column(10,
+                                                fluidRow(
+                                                        column(5,  # First column (narrower)
+                                                               dateInput("date", "Datum", value = Sys.Date(), weekstart = 1, format = "dd-mm-yyyy", daysofweekdisabled = c(0, 6)),
+                                                               timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
+                                                               timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE),
+                                                               timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
+                                                               timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
+                                                               hr(),
+                                                               uiOutput("entryHistory")
+                                                        ),
+                                                        column(7,  # Second column (wider)
+                                                               textAreaInput("tasks", "Poročilo o opravljenem delu", value = "", rows = 10),
+                                                               textAreaInput("notes", "Dodatne opombe za špico", value = "", rows = 5),
+                                                               checkboxInput("lunch", "Malica", value = TRUE)
+                                                        )
+                                                )
                                          ),
-                                         column(6,
-                                                uiOutput("entryHistory")
+                                         column(2,  # Third column (narrowest)
+                                                uiOutput("calculatedWorkTime"),
+                                                br(),
+                                                actionButton("submit", "Oddaj/posodobi", width = "100%"),
+                                                br(),
+                                                br(),
+                                                actionButton("clear", "Počisti", width = "100%")
                                          )
                                  )
                         ),
                         tabPanel("Spremeni geslo",
-                                 passwordInput("current_password", "Current Password"),
-                                 passwordInput("new_password", "New Password"),
-                                 passwordInput("confirm_password", "Confirm New Password"),
-                                 actionButton("change_password", "Change Password")
+                                 passwordInput("current_password", "Obstoječe geslo"),
+                                 passwordInput("new_password", "Novo geslo"),
+                                 passwordInput("confirm_password", "Potrdi novo geslo"),
+                                 actionButton("change_password", "Spremeni geslo")
                         )
                 )
         })
@@ -179,7 +200,13 @@ server <- function(input, output, session) {
                 total_hours <- floor(total_time)
                 total_minutes <- round((total_time - total_hours) * 60)
                 
-                color <- if (abs(total_time - 8) < 0.01) "green" else if (total_time < 8) "yellow" else "lightblue"
+                # Get the user's contract hours
+                contract_hours <- credentials()$contract_type
+                
+                # Determine color based on contract hours
+                color <- if (abs(total_time - contract_hours) < 0.01) "green" 
+                else if (total_time < contract_hours) "yellow" 
+                else "lightblue"
                 
                 list(time = sprintf("%02d:%02d", total_hours, total_minutes), color = color)
         })
@@ -187,9 +214,10 @@ server <- function(input, output, session) {
         output$calculatedWorkTime <- renderUI({
                 result <- workTimeCalc()
                 div(
-                        style = paste("background-color:", result$color, "; padding: 10px; border-radius: 5px;"),
-                        h5("Skupna prisotnost:"),
-                        h4(result$time)
+                        style = paste("background-color:", result$color, "; padding: 20px; border-radius: 10px; text-align: center;"),
+                        h4("Skupna prisotnost:"),
+                        h2(result$time, style = "font-weight: bold;"),
+                        textOutput("contractHours")
                 )
         })
         
