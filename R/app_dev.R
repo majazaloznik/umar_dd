@@ -23,20 +23,16 @@ get_db_connection <- function() {
         })
 }
 
-# User authentication (simplified for example)
-user_base <- data.frame(
-        user_id = c(1, 2, 3, 4, 5, 6, 7),
-        user = c("user1", "user2", "user4", "hr1", "user5",  "user6", "user7"),
-        password = c("pass1", "pass2", "pass4", "hrpass", "pass5", "pass6", "7"),
-        permissions = c("employee", "employee", "hr", "employee","employee", "employee", "employee"),
-        stringsAsFactors = FALSE
-)
-
 # Authentication function
 authenticate <- function(user, password) {
-        user_row <- user_base[user_base$user == user & user_base$password == password, ]
-        if (nrow(user_row) == 1) {
-                list(user_auth = TRUE, user = user, user_id = user_row$user_id, permissions = user_row$permissions)
+        conn <- get_db_connection()
+        on.exit(dbDisconnect(conn))
+        
+        query <- "SELECT id, username, contract_type FROM employees WHERE username = $1 AND password = $2"
+        result <- dbGetQuery(conn, query, list(user, password))
+        
+        if (nrow(result) == 1) {
+                list(user_auth = TRUE, user = result$username, user_id = result$id, permissions = result$contract_type)
         } else {
                 list(user_auth = FALSE)
         }
@@ -121,22 +117,32 @@ server <- function(input, output, session) {
         output$mainUI <- renderUI({
                 req(credentials())
                 
-                fluidRow(
-                        column(6,
-                               dateInput("date", "Datum", value = Sys.Date(), weekstart = 1, format = "dd-mm-yyyy", daysofweekdisabled = c(0, 6)),
-                               timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
-                               timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE),
-                               timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
-                               timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
-                               uiOutput("calculatedWorkTime"),
-                               checkboxInput("lunch", "Malica", value = TRUE),  # Add this line
-                               textAreaInput("tasks", "Poročilo o opravljenem delu", value = "", rows = 5),
-                               textAreaInput("notes", "Dodatne opombe za špico", value = "", rows = 3),
-                               actionButton("submit", "Oddaj/posodobi"),
-                               actionButton("clear", "Počisti")
+                tabsetPanel(
+                        tabPanel("Vnos in popravki",
+                                 fluidRow(
+                                         column(6,
+                                                dateInput("date", "Datum", value = Sys.Date(), weekstart = 1, format = "dd-mm-yyyy", daysofweekdisabled = c(0, 6)),
+                                                timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
+                                                timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE),
+                                                timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
+                                                timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
+                                                uiOutput("calculatedWorkTime"),
+                                                checkboxInput("lunch", "Malica", value = TRUE),
+                                                textAreaInput("tasks", "Poročilo o opravljenem delu", value = "", rows = 5),
+                                                textAreaInput("notes", "Dodatne opombe za špico", value = "", rows = 3),
+                                                actionButton("submit", "Oddaj/posodobi"),
+                                                actionButton("clear", "Počisti")
+                                         ),
+                                         column(6,
+                                                uiOutput("entryHistory")
+                                         )
+                                 )
                         ),
-                        column(6,
-                               uiOutput("entryHistory")
+                        tabPanel("Spremeni geslo",
+                                 passwordInput("current_password", "Current Password"),
+                                 passwordInput("new_password", "New Password"),
+                                 passwordInput("confirm_password", "Confirm New Password"),
+                                 actionButton("change_password", "Change Password")
                         )
                 )
         })
@@ -300,6 +306,7 @@ server <- function(input, output, session) {
                         updateTimeInput(session, "breakEnd", value = entry$break_end)
                         updateTextAreaInput(session, "tasks", value = entry$tasks)
                         updateTextAreaInput(session, "notes", value = entry$notes)
+                        updateCheckboxInput(session, "lunch", value = as.logical(entry$lunch))
                         
                         # Trigger recalculation of work time
                         session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
@@ -491,7 +498,7 @@ server <- function(input, output, session) {
                                 updateTimeInput(session, "breakEnd", value = result$break_end)
                                 updateTextAreaInput(session, "tasks", value = result$tasks)
                                 updateTextAreaInput(session, "notes", value = result$notes)
-                                updateCheckboxInput(session, "lunch", value = result$lunch)  # Add this line
+                                updateCheckboxInput(session, "lunch", value = as.logical(result$lunch)) 
                                 
                                 # Trigger recalculation of work time
                                 session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
@@ -521,7 +528,9 @@ server <- function(input, output, session) {
                 updateTextInput(session, "breakEnd", value = "")
                 updateTextAreaInput(session, "tasks", value = "")
                 updateTextAreaInput(session, "notes", value = "")
-                updateCheckboxInput(session, "lunch", value = TRUE)
+                if (is.null(input$lunch)) {
+                        updateCheckboxInput(session, "lunch", value = TRUE)
+                }
                 
                 
                 # Reset the calculated work time
@@ -533,6 +542,32 @@ server <- function(input, output, session) {
                 get_entry_details(input$selectDate, update_form = TRUE)
         })
         
+        observeEvent(input$change_password, {
+                req(credentials())
+                
+                if (input$new_password != input$confirm_password) {
+                        showNotification("New passwords do not match", type = "error")
+                        return()
+                }
+                
+                conn <- get_db_connection()
+                on.exit(dbDisconnect(conn))
+                
+                # First, verify current password
+                verify_query <- "SELECT id FROM employees WHERE id = $1 AND password = $2"
+                verify_result <- dbGetQuery(conn, verify_query, list(credentials()$user_id, input$current_password))
+                
+                if (nrow(verify_result) == 0) {
+                        showNotification("Current password is incorrect", type = "error")
+                        return()
+                }
+                
+                # If verified, update password
+                update_query <- "UPDATE employees SET password = $1 WHERE id = $2"
+                dbExecute(conn, update_query, list(input$new_password, credentials()$user_id))
+                
+                showNotification("Password updated successfully", type = "message")
+        })
 }
 
 shinyApp(ui, server)

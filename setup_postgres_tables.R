@@ -55,3 +55,21 @@ CREATE INDEX idx_time_entries_user_date ON time_entries (user_id, date, is_curre
 
 # Execute the table creation command
 dbExecute(con, create_index_sql)
+
+create_emp_table_sql <- 'CREATE TABLE employees (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password VARCHAR(50) NOT NULL,
+        contract_type int not null,
+        arrival_start time not null,
+        arrival_end time not null,
+        departure_start time not null,
+        departure_end time not null,
+        access varchar(20) not null,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);'
+
+# Execute the table creation command
+dbExecute(con, create_emp_table_sql)
+
+
