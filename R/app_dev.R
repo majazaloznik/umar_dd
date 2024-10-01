@@ -29,9 +29,12 @@ authenticate <- function(user, password) {
         conn <- get_db_connection()
         on.exit(dbDisconnect(conn))
         
-        query <- "SELECT id, username, contract_type, access, arrival_start, arrival_end, departure_start, departure_end 
+        query <- "SELECT id, username, fullname, contract_type, access, arrival_start, arrival_end, departure_start, departure_end 
               FROM employees WHERE username = $1 AND password = $2"
         result <- dbGetQuery(conn, query, list(user, password))
+        
+        print("Debug - Authentication result:")
+        print(result)
         
         if (nrow(result) == 1) {
                 parse_time_safely <- function(x) {
@@ -44,39 +47,47 @@ authenticate <- function(user, password) {
                         })
                 }
                 
-                list(user_auth = TRUE, 
-                     user = result$username, 
-                     fullname = result$fullname,
-                     sector = result$sector,
-                     user_id = result$id, 
-                     contract_type = result$contract_type,
-                     permissions = result$access,
-                     arrival_start = parse_time_safely(result$arrival_start),
-                     arrival_end = parse_time_safely(result$arrival_end),
-                     departure_start = parse_time_safely(result$departure_start),
-                     departure_end = parse_time_safely(result$departure_end))
+                credentials <- list(
+                        user_auth = TRUE, 
+                        user = result$username, 
+                        fullname = as.character(result$fullname),  # Explicitly convert to character
+                        user_id = result$id, 
+                        contract_type = result$contract_type,
+                        permissions = result$access,
+                        arrival_start = parse_time_safely(result$arrival_start),
+                        arrival_end = parse_time_safely(result$arrival_end),
+                        departure_start = parse_time_safely(result$departure_start),
+                        departure_end = parse_time_safely(result$departure_end)
+                )
+                
+                print("Debug - Credentials created:")
+                print(credentials)
+                
+                return(credentials)
         } else {
                 list(user_auth = FALSE)
         }
 }
 
 ui <- fluidPage(
-        useShinyjs(), 
+        useShinyjs(),
         tags$head(
                 tags$style(HTML("
             .shiny-input-container {margin-bottom: 10px;}
             #submit, #clear {margin-top: 10px;}
             #calculatedWorkTime {margin-bottom: 20px;}
+            #header {
+                background-color: #f8f9fa;
+                padding: 10px;
+                margin-bottom: 15px;
+                border-bottom: 1px solid #dee2e6;
+            }
         "))
         ),
-        tags$head(
-                tags$script("
-            Shiny.addCustomMessageHandler('updateInputStyle', function(message) {
-                $('#' + message.id).css('background-color', message.style.split(':')[1].trim());
-            });
-        ")
-        ),
         tags$script("
+        Shiny.addCustomMessageHandler('updateInputStyle', function(message) {
+            $('#' + message.id).css('background-color', message.style.split(':')[1].trim());
+        });
         Shiny.addCustomMessageHandler('triggerWorkTimeCalc', function(message) {
             Shiny.setInputValue('startTime', $('#startTime').val(), {priority: 'event'});
             Shiny.setInputValue('endTime', $('#endTime').val(), {priority: 'event'});
@@ -84,15 +95,18 @@ ui <- fluidPage(
             Shiny.setInputValue('breakEnd', $('#breakEnd').val(), {priority: 'event'});
         });
     "),
-        # Login UI
-        uiOutput("loginUI"),
+        
+        # Header with login/logout UI
+        div(id = "header", 
+            uiOutput("loginUI")
+        ),
         
         # Main app UI
         uiOutput("mainUI"),
         
         # version number
         tags$footer(
-                tags$hr(), # Optional: adds a horizontal line above the version text
+                tags$hr(),
                 tags$p(
                         "Špička\U2122 - 2024 - App Version: 0.3.0", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
@@ -115,7 +129,12 @@ server <- function(input, output, session) {
                                 actionButton("login", "Prijava")
                         )
                 } else {
-                        actionButton("logout", "Odjava")
+                        div(style = "display: flex; justify-content: space-between; align-items: center;",
+                            div(
+                                    p(credentials()$fullname),
+                            ),
+                            actionButton("logout", "Odjava")
+                        )
                 }
         })
         
@@ -229,18 +248,6 @@ server <- function(input, output, session) {
                         departure_end <- hms::as_hms(as.numeric(departure_end) - 60 * 60)  # Subtract 1 hour
                 }
                 
-                print(paste("Input start_time:", input$startTime))
-                print(paste("Input end_time:", input$endTime))
-                print(paste("Input date:", input$date))
-                print(paste("Is Friday:", friday))
-                
-                print(paste("Extracted start_time:", start_time))
-                print(paste("Extracted end_time:", end_time))
-                print(paste("Credentials arrival_start:", credentials()$arrival_start))
-                print(paste("Credentials arrival_end:", credentials()$arrival_end))
-                print(paste("departure_start:", departure_start))
-                print(paste("departure_end:", departure_end))
-                
                 start_in_range <- if (is.null(start_time)) NULL else 
                         !is.null(credentials()$arrival_start) &&
                         start_time >= credentials()$arrival_start && 
@@ -251,9 +258,6 @@ server <- function(input, output, session) {
                         end_time >= departure_start && 
                         end_time <= departure_end
                 
-                print(paste("start_in_range:", start_in_range))
-                print(paste("end_in_range:", end_in_range))
-                
                 list(
                         start = start_in_range,
                         end = end_in_range
@@ -262,7 +266,6 @@ server <- function(input, output, session) {
         
         update_time_input_style <- function(session, inputId, in_range) {
                 color <- if(is.null(in_range)) NULL else if(in_range) "white" else "orange"
-                print(paste("Updating", inputId, "background to", color))
                 shinyjs::runjs(sprintf("
         var input = document.getElementById('%s');
         if (input) {
@@ -576,8 +579,8 @@ server <- function(input, output, session) {
                 } else {
                         dbExecute(conn, "ROLLBACK")
                         showModal(modalDialog(
-                                title = "Submission Error",
-                                "Failed to submit time entry. Please try again or contact support if the problem persists.",
+                                title = "Napaka pri zapisu",
+                                "Vnos ni uspel. Ali so podatki nepopolni ali pa nepravilni.",
                                 easyClose = TRUE
                         ))
                 }
