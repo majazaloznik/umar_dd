@@ -33,9 +33,6 @@ authenticate <- function(user, password) {
               FROM employees WHERE username = $1 AND password = $2"
         result <- dbGetQuery(conn, query, list(user, password))
         
-        print("Debug - Authentication result:")
-        print(result)
-        
         if (nrow(result) == 1) {
                 parse_time_safely <- function(x) {
                         if (is.null(x) || is.na(x) || x == "") return(NULL)
@@ -59,9 +56,6 @@ authenticate <- function(user, password) {
                         departure_start = parse_time_safely(result$departure_start),
                         departure_end = parse_time_safely(result$departure_end)
                 )
-                
-                print("Debug - Credentials created:")
-                print(credentials)
                 
                 return(credentials)
         } else {
@@ -181,17 +175,16 @@ server <- function(input, output, session) {
         # Main app logic
         output$mainUI <- renderUI({
                 req(credentials())
-                
+                default_range <- get_default_date_range()
                 tabsetPanel(
                         tabPanel("Vnos in popravki",
                                  fluidRow(
                                          column(10,
                                                 fluidRow(
                                                         column(5,  # First column (narrower)
-                                                               dateInput("date", "Datum", value = Sys.Date(), weekstart = 1, format = "dd-mm-yyyy", daysofweekdisabled = c(0, 6)),
+                                                               dateInput("date", "Datum", value = Sys.Date(), weekstart = 1, format = "dd.mm.yyyy", daysofweekdisabled = c(0, 6), language = "sl"),
                                                                timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
-                                                               timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE),
-                                                               timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
+                                                               timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE),                                                               timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
                                                                timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
                                                                hr(),
                                                                uiOutput("entryHistory")
@@ -218,7 +211,25 @@ server <- function(input, output, session) {
                                  passwordInput("new_password", "Novo geslo"),
                                  passwordInput("confirm_password", "Potrdi novo geslo"),
                                  actionButton("change_password", "Spremeni geslo")
-                        )
+                        ),
+                        if (credentials()$permissions %in% c("admin", "head")) {
+                                tabPanel("Poročila",
+                                         h3("Generiraj poročilo"),
+                                         dateRangeInput("report_date_range", "Izberi časovno obdobje:",
+                                                        start = default_range$start, 
+                                                        end = default_range$end,
+                                                        min = "2024-09-01",  # Adjust this to your needs
+                                                        max = Sys.Date(),
+                                                        format = "dd.mm.yyyy",
+                                                        language = "sl",
+                                                        weekstart = 1),
+                                         if (credentials()$permissions == "admin") {
+                                                 actionButton("generate_admin_report", "Generiraj admin poročilo")
+                                         } else {
+                                                 actionButton("generate_head_report", "Generiraj poročilo vodje")
+                                         }
+                                )
+                        }
                 )
         })
         
@@ -435,6 +446,21 @@ server <- function(input, output, session) {
                 formatted_time <- sprintf("%04d", as.integer(time_str))
                 paste0(substr(formatted_time, 1, 2), ":", substr(formatted_time, 3, 4))
         }
+        # helper funciton for report date range
+        get_default_date_range <- function() {
+                today <- Sys.Date()
+                current_day <- as.integer(format(today, "%u"))  # 1 = Monday, 7 = Sunday
+                
+                if (current_day >= 5) {  # Friday, Saturday, or Sunday
+                        end_date <- today + (5 - current_day)  # Adjust to the current week's Friday
+                        start_date <- end_date - 4  # Monday of the same week
+                } else {  # Monday to Thursday
+                        end_date <- today - current_day - 2  # Friday of the previous week
+                        start_date <- end_date - 4  # Monday of the previous week
+                }
+                
+                list(start = start_date, end = end_date)
+        }
         # Clear form when credentials change (i.e., on login)
         observeEvent(credentials(), {
                 if (!is.null(credentials())) {
@@ -491,6 +517,26 @@ server <- function(input, output, session) {
         
         observeEvent(input$clear, {
                 clearForm(session, setDefaultDate = TRUE)
+        })
+        
+        observeEvent(input$generate_admin_report, {
+                req(credentials()$permissions == "admin")
+                # Placeholder for admin report generation
+                showNotification("Generiranje admin poročila...", type = "message")
+                # Here you would add the logic to generate the admin report
+                # For now, we'll just show a message
+                Sys.sleep(2)  # Simulate report generation time
+                showNotification("Admin poročilo generirano!", type = "message")
+        })
+        
+        observeEvent(input$generate_head_report, {
+                req(credentials()$permissions == "head")
+                # Placeholder for head report generation
+                showNotification("Generiranje poročila vodje...", type = "message")
+                # Here you would add the logic to generate the head's report
+                # For now, we'll just show a message
+                Sys.sleep(2)  # Simulate report generation time
+                showNotification("Poročilo vodje generirano!", type = "message")
         })
         
         # Define a function to insert or update an entry
