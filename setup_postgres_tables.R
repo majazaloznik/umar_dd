@@ -59,6 +59,7 @@ dbExecute(con, create_index_sql)
 create_emp_table_sql <- 'CREATE TABLE employees (
         id SERIAL PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
+        fullname VARCHAR(50) NOT NULL,
         password VARCHAR(50) NOT NULL,
         contract_type int not null,
         arrival_start time not null,
@@ -66,6 +67,7 @@ create_emp_table_sql <- 'CREATE TABLE employees (
         departure_start time not null,
         departure_end time not null,
         access varchar(20) not null,
+        sector int not null,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );'
 

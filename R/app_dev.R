@@ -1,10 +1,11 @@
 # app.R
-
 library(shiny)
 library(DBI)
 library(RPostgres)
 library(lubridate)
 library(shinyTime)
+library(hms)
+library(shinyjs)
 Sys.setenv(TZ = "Europe/Ljubljana")
 
 # Database connection function
@@ -28,27 +29,52 @@ authenticate <- function(user, password) {
         conn <- get_db_connection()
         on.exit(dbDisconnect(conn))
         
-        query <- "SELECT id, username, contract_type, access FROM employees WHERE username = $1 AND password = $2"
+        query <- "SELECT id, username, contract_type, access, arrival_start, arrival_end, departure_start, departure_end 
+              FROM employees WHERE username = $1 AND password = $2"
         result <- dbGetQuery(conn, query, list(user, password))
         
         if (nrow(result) == 1) {
+                parse_time_safely <- function(x) {
+                        if (is.null(x) || is.na(x) || x == "") return(NULL)
+                        tryCatch({
+                                hms::as_hms(x)
+                        }, error = function(e) {
+                                warning(paste("Could not parse time:", x))
+                                NULL
+                        })
+                }
+                
                 list(user_auth = TRUE, 
                      user = result$username, 
+                     fullname = result$fullname,
+                     sector = result$sector,
                      user_id = result$id, 
                      contract_type = result$contract_type,
-                     permissions = result$access)
+                     permissions = result$access,
+                     arrival_start = parse_time_safely(result$arrival_start),
+                     arrival_end = parse_time_safely(result$arrival_end),
+                     departure_start = parse_time_safely(result$departure_start),
+                     departure_end = parse_time_safely(result$departure_end))
         } else {
                 list(user_auth = FALSE)
         }
 }
 
 ui <- fluidPage(
+        useShinyjs(), 
         tags$head(
                 tags$style(HTML("
             .shiny-input-container {margin-bottom: 10px;}
             #submit, #clear {margin-top: 10px;}
             #calculatedWorkTime {margin-bottom: 20px;}
         "))
+        ),
+        tags$head(
+                tags$script("
+            Shiny.addCustomMessageHandler('updateInputStyle', function(message) {
+                $('#' + message.id).css('background-color', message.style.split(':')[1].trim());
+            });
+        ")
         ),
         tags$script("
         Shiny.addCustomMessageHandler('triggerWorkTimeCalc', function(message) {
@@ -68,7 +94,7 @@ ui <- fluidPage(
         tags$footer(
                 tags$hr(), # Optional: adds a horizontal line above the version text
                 tags$p(
-                        "App Version: 0.3.0", 
+                        "Špička\U2122 - 2024 - App Version: 0.3.0", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
                 )
         )
@@ -84,9 +110,9 @@ server <- function(input, output, session) {
         output$loginUI <- renderUI({
                 if (is.null(credentials())) {
                         wellPanel(
-                                textInput("username", "Username"),
-                                passwordInput("password", "Password"),
-                                actionButton("login", "Log In")
+                                textInput("username", "Uporabniško ime"),
+                                passwordInput("password", "Geslo"),
+                                actionButton("login", "Prijava")
                         )
                 } else {
                         actionButton("logout", "Odjava")
@@ -117,6 +143,15 @@ server <- function(input, output, session) {
                 if (exists("conn") && inherits(conn, "DBIConnection")) {
                         dbDisconnect(conn)
                 }
+                
+                # Reset the calculated work time output
+                output$calculatedWorkTime <- renderUI({
+                        div(
+                                style = "background-color: white; padding: 20px; border-radius: 10px; text-align: center;",
+                                h4("Skupna prisotnost:"),
+                                h2("-- : --", style = "font-weight: bold;")
+                        )
+                })
                 
                 # Reload the session
                 session$reload()
@@ -168,7 +203,90 @@ server <- function(input, output, session) {
                 )
         })
         
+        time_in_range <- reactive({
+                req(credentials(), input$date)  # Ensure both credentials and date are available
+                
+                extract_time <- function(time_input) {
+                        if (inherits(time_input, "POSIXt")) {
+                                extracted_time <- hms::as_hms(time_input)
+                                return(if (extracted_time == hms::as_hms("00:00:00")) NULL else extracted_time)
+                        }
+                        return(NULL)
+                }
+                
+                start_time <- extract_time(input$startTime)
+                end_time <- extract_time(input$endTime)
+                
+                # Ensure input$date is a Date object
+                date <- if(inherits(input$date, "Date")) input$date else as.Date(input$date)
+                friday <- !is.na(date) && wday(date) == 6
+                contract_hours <- credentials()$contract_type
+                departure_start <- credentials()$departure_start
+                departure_end <- credentials()$departure_end
+                
+                if(friday & contract_hours == 8) {
+                        departure_start <- hms::as_hms(as.numeric(departure_start) - 30 * 60)  # Subtract 30 minutes
+                        departure_end <- hms::as_hms(as.numeric(departure_end) - 60 * 60)  # Subtract 1 hour
+                }
+                
+                print(paste("Input start_time:", input$startTime))
+                print(paste("Input end_time:", input$endTime))
+                print(paste("Input date:", input$date))
+                print(paste("Is Friday:", friday))
+                
+                print(paste("Extracted start_time:", start_time))
+                print(paste("Extracted end_time:", end_time))
+                print(paste("Credentials arrival_start:", credentials()$arrival_start))
+                print(paste("Credentials arrival_end:", credentials()$arrival_end))
+                print(paste("departure_start:", departure_start))
+                print(paste("departure_end:", departure_end))
+                
+                start_in_range <- if (is.null(start_time)) NULL else 
+                        !is.null(credentials()$arrival_start) &&
+                        start_time >= credentials()$arrival_start && 
+                        start_time <= credentials()$arrival_end
+                
+                end_in_range <- if (is.null(end_time)) NULL else 
+                        !is.null(departure_start) &&
+                        end_time >= departure_start && 
+                        end_time <= departure_end
+                
+                print(paste("start_in_range:", start_in_range))
+                print(paste("end_in_range:", end_in_range))
+                
+                list(
+                        start = start_in_range,
+                        end = end_in_range
+                )
+        })
+        
+        update_time_input_style <- function(session, inputId, in_range) {
+                color <- if(is.null(in_range)) NULL else if(in_range) "white" else "orange"
+                print(paste("Updating", inputId, "background to", color))
+                shinyjs::runjs(sprintf("
+        var input = document.getElementById('%s');
+        if (input) {
+            input.style.backgroundColor = '%s';
+            console.log('Updated %s background to %s');
+        } else {
+            console.log('Could not find input element %s');
+        }
+    ", inputId, color, inputId, color, inputId))
+        }
+        
+        observe({
+                req(credentials())
+                ranges <- time_in_range()
+                update_time_input_style(session, "startTime", ranges$start)
+                update_time_input_style(session, "endTime", ranges$end)
+        })
+        
         workTimeCalc <- reactive({
+                # First, check if credentials exist
+                if (is.null(credentials())) {
+                        return(list(time = "-- : --", color = "white"))
+                }
+                
                 # Helper function to extract time from POSIXlt or return NULL if empty
                 extract_time <- function(time_input) {
                         if (inherits(time_input, "POSIXt")) {
