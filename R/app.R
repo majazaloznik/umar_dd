@@ -5,23 +5,30 @@ library(DBI)
 library(RPostgres)
 library(lubridate)
 library(shinyTime)
+Sys.setenv(TZ = "Europe/Ljubljana")
 
 # Database connection function
 get_db_connection <- function() {
-        dbConnect(RPostgres::Postgres(),
-                  dbname = "umar_dd",
-                  host = "localhost",
-                  port = 5432,
-                  user = "postgres",
-                  password = Sys.getenv("PG_PG_PSW"))
+        tryCatch({
+                conn <- dbConnect(RPostgres::Postgres(),
+                                  dbname = "umar_dd",
+                                  host = "localhost",
+                                  port = 5432,
+                                  user = "postgres",
+                                  password = Sys.getenv("PG_PG_PSW"))
+                return(conn)
+        }, error = function(e) {
+                message("Failed to connect to database: ", e$message)
+                return(NULL)
+        })
 }
 
 # User authentication (simplified for example)
 user_base <- data.frame(
-        user_id = c(1, 2, 3, 4, 5, 6),
-        user = c("user1", "user2", "user4", "hr1", "user5",  "user6"),
-        password = c("pass1", "pass2", "pass4", "hrpass", "pass5", "pass6"),
-        permissions = c("employee", "employee", "hr", "employee","employee", "employee"),
+        user_id = c(1, 2, 3, 4, 5, 6, 7),
+        user = c("user1", "user2", "user4", "hr1", "user5",  "user6", "user7"),
+        password = c("pass1", "pass2", "pass4", "hrpass", "pass5", "pass6", "7"),
+        permissions = c("employee", "employee", "hr", "employee","employee", "employee", "employee"),
         stringsAsFactors = FALSE
 )
 
@@ -54,7 +61,7 @@ ui <- fluidPage(
         tags$footer(
                 tags$hr(), # Optional: adds a horizontal line above the version text
                 tags$p(
-                        "App Version: 0.2.0", 
+                        "App Version: 0.3.0", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
                 )
         )
@@ -90,33 +97,47 @@ server <- function(input, output, session) {
                 }
         })
         
-        # Logout logic
         observeEvent(input$logout, {
+                # Invalidate all reactive values that depend on user session
                 credentials(NULL)
+                entry_update(0)
+                just_logged_in(FALSE)
+                
+                # Clear all inputs
+                lapply(names(input), function(x) updateTextInput(session, x, value = ""))
+                
+                # Clear any ongoing database connections
+                if (exists("conn") && inherits(conn, "DBIConnection")) {
+                        dbDisconnect(conn)
+                }
+                
+                # Reload the session
+                session$reload()
+                
+                showNotification("Uspešna odjava.", type = "message")
         })
         
         # Main app logic
         output$mainUI <- renderUI({
                 req(credentials())
                 
-                tabsetPanel(id = "tabs",
-                            tabPanel("Vnos in popravki",
-                                     dateInput("date", "Datum", value = NULL, weekstart = 1),
-                                     timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
-                                     timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE),
-                                     timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
-                                     timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
-                                     uiOutput("calculatedWorkTime"),
-                                     textAreaInput("tasks", "Poročilo o opravljenem delu", value = "", rows = 5),
-                                     textAreaInput("notes", "Dodatne opombe za špico", value = "", rows = 3),
-                                     actionButton("submit", "Oddaj/posodobi"),
-                                     actionButton("clear", "Počisti") 
-                            ),
-                            tabPanel("Vpogled v vnose",
-                                     selectInput("selectDate", "Datum", choices = NULL),
-                                     uiOutput("submissionDetails"),
-                                     uiOutput("entryHistory")
-                            )
+                fluidRow(
+                        column(6,
+                               dateInput("date", "Datum", value = Sys.Date(), weekstart = 1, format = "dd-mm-yyyy", daysofweekdisabled = c(0, 6)),
+                               timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
+                               timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE),
+                               timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
+                               timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
+                               uiOutput("calculatedWorkTime"),
+                               checkboxInput("lunch", "Malica", value = TRUE),  # Add this line
+                               textAreaInput("tasks", "Poročilo o opravljenem delu", value = "", rows = 5),
+                               textAreaInput("notes", "Dodatne opombe za špico", value = "", rows = 3),
+                               actionButton("submit", "Oddaj/posodobi"),
+                               actionButton("clear", "Počisti")
+                        ),
+                        column(6,
+                               uiOutput("entryHistory")
+                        )
                 )
         })
         
@@ -167,25 +188,36 @@ server <- function(input, output, session) {
         })
         
         output$entryHistory <- renderUI({
-                req(input$selectDate)
+                req(credentials())
+                req(input$date)
+                
                 conn <- get_db_connection()
+                if (is.null(conn)) {
+                        return(p("Napaka pri povezavi z bazo podatkov. Poskusite znova kasneje."))
+                }
                 on.exit(dbDisconnect(conn))
                 
-                query <- "SELECT entry_timestamp, is_current 
-            FROM time_entries 
-            WHERE user_id = $1 AND date = $2 
-            ORDER BY entry_timestamp DESC"
-                history <- dbGetQuery(conn, query, list(credentials()$user_id, input$selectDate))
-                
-                if (nrow(history) > 0) {
-                        tagList(
-                                h4("Zgodovina sprememb"),
-                                lapply(1:nrow(history), function(i) {
-                                        status <- if (history$is_current[i]) "Current" else "Previous"
-                                        p(paste(status, "version submitted at", history$entry_timestamp[i]))
-                                })
-                        )
-                }
+                tryCatch({
+                        query <- "SELECT entry_timestamp, is_current 
+           FROM time_entries 
+           WHERE user_id = $1 AND date = $2 
+           ORDER BY entry_timestamp DESC"
+                        history <- dbGetQuery(conn, query, list(credentials()$user_id, input$date))
+                        
+                        if (nrow(history) > 0) {
+                                tagList(
+                                        h4("Zgodovina sprememb"),
+                                        lapply(1:nrow(history), function(i) {
+                                                status <- if (history$is_current[i]) "Aktivna" else "Prejšnja"
+                                                p(paste(status, "verzija oddana", history$entry_timestamp[i]))
+                                        })
+                                )
+                        } else {
+                                p("Za ta datum še ni vnosa.")
+                        }
+                }, error = function(e) {
+                        p(paste("Napaka pri pridobivanju podatkov:", e$message))
+                })
         })
         
         # Helper function to get the date range for allowed entries, excluding weekends
@@ -207,10 +239,7 @@ server <- function(input, output, session) {
                 # Generate a vector of all dates in the range
                 all_dates <- seq(start_date, current_date, by = "day")
                 
-                # Filter out weekends
-                workdays <- all_dates[!weekdays(all_dates) %in% c("Saturday", "Sunday")]
-                
-                list(start_date = min(workdays), end_date = max(workdays), allowed_dates = workdays)
+                list(start_date = min(all_dates), end_date = max(all_dates))
         }
         
         
@@ -258,6 +287,28 @@ server <- function(input, output, session) {
                 }
         })
         
+        observeEvent(input$date, {
+                req(credentials())
+                
+                entry <- get_entry_details(input$date)
+                
+                if (!is.null(entry)) {
+                        # Populate form with existing entry data
+                        updateTimeInput(session, "startTime", value = entry$start_time)
+                        updateTimeInput(session, "endTime", value = entry$end_time)
+                        updateTimeInput(session, "breakStart", value = entry$break_start)
+                        updateTimeInput(session, "breakEnd", value = entry$break_end)
+                        updateTextAreaInput(session, "tasks", value = entry$tasks)
+                        updateTextAreaInput(session, "notes", value = entry$notes)
+                        updateCheckboxInput(session, "lunch", value = as.logical(entry$lunch))
+                        
+                        # Trigger recalculation of work time
+                        session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
+                } else {
+                        # Clear the form for a new entry
+                        clearForm(session)
+                }
+        })
         # Submit new entry
         observeEvent(input$submit, {
                 req(credentials())
@@ -271,8 +322,8 @@ server <- function(input, output, session) {
                 
                 if (existing_count > 0) {
                         showModal(modalDialog(
-                                title = "Update Existing Entry",
-                                "An entry for this date already exists. Do you want to update it?",
+                                title = "Posodobitev obstoječega vnosa",
+                                "Za ta datum že obstaja vnos. Ali ga res želiš posodobiti?",
                                 footer = tagList(
                                         modalButton("Cancel"),
                                         actionButton("confirmUpdate", "Update")
@@ -302,6 +353,7 @@ server <- function(input, output, session) {
                         break_start <- strftime(input$breakStart, "%H:%M:%S")
                         break_end <- strftime(input$breakEnd, "%H:%M:%S")
                 }
+                
                 # calculate working hours
                 total_time <- as.numeric(difftime(as.POSIXct(end_time, format="%H:%M:%S"),
                                                   as.POSIXct(start_time, format="%H:%M:%S"),
@@ -314,12 +366,12 @@ server <- function(input, output, session) {
                                                           units = "hours"))
                         total_time <- total_time - break_time
                 }
+                
                 # Format total_time as interval
                 calculated_time <- sprintf("%d hours %d minutes",
                                            floor(total_time),
                                            round((total_time - floor(total_time)) * 60))
                 
-                print(total_time)
                 # Start transaction
                 dbExecute(conn, "BEGIN")
                 
@@ -343,12 +395,13 @@ server <- function(input, output, session) {
                         break_end,
                         as.character(input$tasks),
                         as.character(input$notes),
-                        calculated_time
+                        calculated_time,
+                        input$lunch  # Add this line
                 )
                 
                 # Insert new entry
-                insert_query <- "INSERT INTO time_entries (user_id, date, start_time, end_time, break_start, break_end, tasks, notes, is_current, entry_timestamp, calculated_time) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, CURRENT_TIMESTAMP, $9::interval)"
+                insert_query <- "INSERT INTO time_entries (user_id, date, start_time, end_time, break_start, break_end, tasks, notes, is_current, entry_timestamp, calculated_time, lunch) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Ljubljana', $9::interval, $10)"
                 
                 result <- tryCatch({
                         dbExecute(conn, insert_query, params)
@@ -360,7 +413,7 @@ server <- function(input, output, session) {
                 
                 if (!is.null(result) && result == 1) {
                         dbExecute(conn, "COMMIT")
-                        showNotification(ifelse(existing_count > 0, "Entry updated successfully", "Entry submitted successfully"), type = "message")
+                        showNotification(ifelse(existing_count > 0, "Vnos uspešno posodobljen", "Vnos uspešno oddan"), type = "message")
                         entry_update(entry_update() + 1)  # Trigger update of View/Edit tab
                         
                         # Clear the form
@@ -420,25 +473,6 @@ server <- function(input, output, session) {
                                 max = date_range$end_date)
         })
         
-        # Display selected submission details
-        output$submissionDetails <- renderUI({
-                req(credentials(), input$selectDate)
-                entry <- get_entry_details(input$selectDate)
-                
-                if (!is.null(entry)) {
-                        tagList(
-                                p(strong("Datum:"), entry$date),
-                                p(strong("Prihod:"), entry$start_time),
-                                p(strong("Odhod:"), entry$end_time),
-                                p(strong("Privatni izhod:"), entry$break_start),
-                                p(strong("Privatni prihod:"), entry$break_end),
-                                p(strong("Opravljeno delo:"), entry$tasks),
-                                p(strong("Opombe:"), entry$notes),
-                                p(strong("Zadnja posodobitev:"), entry$entry_timestamp)
-                        )
-                }
-        })
-        
         # Get entry details for a specific date
         get_entry_details <- function(date, update_form = FALSE) {
                 req(credentials())
@@ -446,7 +480,7 @@ server <- function(input, output, session) {
                 on.exit(dbDisconnect(conn))
                 
                 query <- "SELECT * FROM time_entries 
-    WHERE user_id = $1 AND date = $2 AND is_current = TRUE"
+              WHERE user_id = $1 AND date = $2 AND is_current = TRUE"
                 result <- dbGetQuery(conn, query, list(credentials()$user_id, date))
                 
                 if (nrow(result) > 0) {
@@ -456,12 +490,9 @@ server <- function(input, output, session) {
                                 updateTimeInput(session, "endTime", value = result$end_time)
                                 updateTimeInput(session, "breakStart", value = result$break_start)
                                 updateTimeInput(session, "breakEnd", value = result$break_end)
-                                # updateTextInput(session, "startTime", value = format(result$start_time, "%H:%M"))
-                                # updateTextInput(session, "endTime", value = format(result$end_time, "%H:%M"))
-                                # updateTextInput(session, "breakStart", value = ifelse(is.na(result$break_start), "", format(result$break_start, "%H:%M")))
-                                # updateTextInput(session, "breakEnd", value = ifelse(is.na(result$break_end), "", format(result$break_end, "%H:%M")))
                                 updateTextAreaInput(session, "tasks", value = result$tasks)
                                 updateTextAreaInput(session, "notes", value = result$notes)
+                                updateCheckboxInput(session, "lunch", value = as.logical(result$lunch)) 
                                 
                                 # Trigger recalculation of work time
                                 session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
@@ -491,6 +522,10 @@ server <- function(input, output, session) {
                 updateTextInput(session, "breakEnd", value = "")
                 updateTextAreaInput(session, "tasks", value = "")
                 updateTextAreaInput(session, "notes", value = "")
+                if (is.null(input$lunch)) {
+                        updateCheckboxInput(session, "lunch", value = TRUE)
+                }
+                
                 
                 # Reset the calculated work time
                 session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
@@ -500,6 +535,7 @@ server <- function(input, output, session) {
                 req(input$selectDate != "", input$tabs == "View Submissions")
                 get_entry_details(input$selectDate, update_form = TRUE)
         })
+        
 }
 
 shinyApp(ui, server)
