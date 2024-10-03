@@ -485,36 +485,31 @@ server <- function(input, output, session) {
         observeEvent(credentials(), {
                 if (!is.null(credentials())) {
                         clearForm(session)
-                }
+                        }
         })
         
         observeEvent(input$date, {
                 req(credentials())
                 
-                if (is.null(input$date)) {
-                        clearForm(session)
-                } else {
-                        entry <- get_entry_details(input$date)
+                entry <- get_entry_details(input$date)
+                
+                if (!is.null(entry)) {
+                        # Populate form with existing entry data
+                        updateTimeInput(session, "startTime", value = entry$start_time)
+                        updateTimeInput(session, "endTime", value = entry$end_time)
+                        updateTimeInput(session, "breakStart", value = entry$break_start)
+                        updateTimeInput(session, "breakEnd", value = entry$break_end)
+                        updateTextAreaInput(session, "tasks", value = entry$tasks)
+                        updateTextAreaInput(session, "notes", value = entry$notes)
+                        updateCheckboxInput(session, "lunch", value = as.logical(entry$lunch))
                         
-                        if (!is.null(entry)) {
-                                # Populate form with existing entry data
-                                updateTimeInput(session, "startTime", value = entry$start_time)
-                                updateTimeInput(session, "endTime", value = entry$end_time)
-                                updateTimeInput(session, "breakStart", value = entry$break_start)
-                                updateTimeInput(session, "breakEnd", value = entry$break_end)
-                                updateTextAreaInput(session, "tasks", value = entry$tasks)
-                                updateTextAreaInput(session, "notes", value = entry$notes)
-                                updateCheckboxInput(session, "lunch", value = as.logical(entry$lunch))
-                                
-                                # Trigger recalculation of work time
-                                session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
-                        } else {
-                                # Clear the form for a new entry
-                                clearForm(session)
-                        }
+                        # Trigger recalculation of work time
+                        session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
+                } else {
+                        # Clear the form for a new entry
+                        clearForm(session)
                 }
         })
-        
         # Submit new entry
         observeEvent(input$submit, {
                 req(credentials())
@@ -686,8 +681,7 @@ server <- function(input, output, session) {
         # Update date choices when viewing submissions
         observe({
                 req(credentials())
-                date_choices <- c("", get_user_dates())  # Add an empty choice
-                updateSelectInput(session, "selectDate", choices = date_choices)
+                updateSelectInput(session, "selectDate", choices = get_user_dates())
         })
         
         # Update date input on the entry tab
@@ -696,8 +690,7 @@ server <- function(input, output, session) {
                 date_range <- get_allowed_date_range()
                 updateDateInput(session, "date",
                                 min = date_range$start_date,
-                                max = date_range$end_date,
-                                value = NULL)
+                                max = date_range$end_date)
         })
         
         # Get entry details for a specific date
@@ -744,7 +737,7 @@ server <- function(input, output, session) {
         
         # Add a new function to clear the form
         clearForm <- function(session) {
-                updateDateInput(session, "date", value = NULL) 
+                updateDateInput(session, "date", value = NULL)
                 
                 updateTextInput(session, "startTime", value = "")
                 updateTextInput(session, "endTime", value = "")
@@ -755,7 +748,6 @@ server <- function(input, output, session) {
                 if (is.null(input$lunch)) {
                         updateCheckboxInput(session, "lunch", value = TRUE)
                 }
-                
                 # Reset the background color of time input fields
                 shinyjs::runjs("$('#startTime').css('background-color', 'white');")
                 shinyjs::runjs("$('#endTime').css('background-color', 'white');")
