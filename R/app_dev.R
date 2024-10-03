@@ -244,7 +244,11 @@ server <- function(input, output, session) {
         })
         
         time_in_range <- reactive({
-                req(credentials(), input$date)  # Ensure both credentials and date are available
+                req(credentials())
+                
+                if (is.null(input$date) || is.na(input$date)) {
+                        return(list(start = NULL, end = NULL))
+                }
                 
                 extract_time <- function(time_input) {
                         if (inherits(time_input, "POSIXt")) {
@@ -311,6 +315,10 @@ server <- function(input, output, session) {
                         return(list(time = "-- : --", color = "white"))
                 }
                 
+                if (is.null(credentials()) || is.null(input$date) || is.na(input$date)) {
+                        return(list(time = "-- : --", color = "white"))
+                }
+                
                 # Helper function to extract time from POSIXlt or return NULL if empty
                 extract_time <- function(time_input) {
                         if (inherits(time_input, "POSIXt")) {
@@ -365,7 +373,9 @@ server <- function(input, output, session) {
         
         output$entryHistory <- renderUI({
                 req(credentials())
-                req(input$date)
+                if (is.null(input$date) || is.na(input$date)) {
+                        return(p("Ni izbranega datuma."))
+                }
                 
                 conn <- get_db_connection()
                 if (is.null(conn)) {
@@ -474,32 +484,37 @@ server <- function(input, output, session) {
         # Clear form when credentials change (i.e., on login)
         observeEvent(credentials(), {
                 if (!is.null(credentials())) {
-                        clearForm(session, setDefaultDate = TRUE)
+                        clearForm(session)
                 }
         })
         
         observeEvent(input$date, {
                 req(credentials())
                 
-                entry <- get_entry_details(input$date)
-                
-                if (!is.null(entry)) {
-                        # Populate form with existing entry data
-                        updateTimeInput(session, "startTime", value = entry$start_time)
-                        updateTimeInput(session, "endTime", value = entry$end_time)
-                        updateTimeInput(session, "breakStart", value = entry$break_start)
-                        updateTimeInput(session, "breakEnd", value = entry$break_end)
-                        updateTextAreaInput(session, "tasks", value = entry$tasks)
-                        updateTextAreaInput(session, "notes", value = entry$notes)
-                        updateCheckboxInput(session, "lunch", value = as.logical(entry$lunch))
-                        
-                        # Trigger recalculation of work time
-                        session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
-                } else {
-                        # Clear the form for a new entry
+                if (is.null(input$date)) {
                         clearForm(session)
+                } else {
+                        entry <- get_entry_details(input$date)
+                        
+                        if (!is.null(entry)) {
+                                # Populate form with existing entry data
+                                updateTimeInput(session, "startTime", value = entry$start_time)
+                                updateTimeInput(session, "endTime", value = entry$end_time)
+                                updateTimeInput(session, "breakStart", value = entry$break_start)
+                                updateTimeInput(session, "breakEnd", value = entry$break_end)
+                                updateTextAreaInput(session, "tasks", value = entry$tasks)
+                                updateTextAreaInput(session, "notes", value = entry$notes)
+                                updateCheckboxInput(session, "lunch", value = as.logical(entry$lunch))
+                                
+                                # Trigger recalculation of work time
+                                session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
+                        } else {
+                                # Clear the form for a new entry
+                                clearForm(session)
+                        }
                 }
         })
+        
         # Submit new entry
         observeEvent(input$submit, {
                 req(credentials())
@@ -526,7 +541,7 @@ server <- function(input, output, session) {
         })
         
         observeEvent(input$clear, {
-                clearForm(session, setDefaultDate = TRUE)
+                clearForm(session)
         })
         
         observeEvent(input$generate_admin_report, {
@@ -628,8 +643,7 @@ server <- function(input, output, session) {
                         entry_update(entry_update() + 1)  # Trigger update of View/Edit tab
                         
                         # Clear the form
-                        clearForm(session, setDefaultDate = TRUE)
-                        
+                        clearForm(session)                        
                         # Reset the calculated work time
                         session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
                 } else {
@@ -672,7 +686,8 @@ server <- function(input, output, session) {
         # Update date choices when viewing submissions
         observe({
                 req(credentials())
-                updateSelectInput(session, "selectDate", choices = get_user_dates())
+                date_choices <- c("", get_user_dates())  # Add an empty choice
+                updateSelectInput(session, "selectDate", choices = date_choices)
         })
         
         # Update date input on the entry tab
@@ -681,7 +696,8 @@ server <- function(input, output, session) {
                 date_range <- get_allowed_date_range()
                 updateDateInput(session, "date",
                                 min = date_range$start_date,
-                                max = date_range$end_date)
+                                max = date_range$end_date,
+                                value = NULL)
         })
         
         # Get entry details for a specific date
@@ -689,6 +705,13 @@ server <- function(input, output, session) {
                 req(credentials())
                 conn <- get_db_connection()
                 on.exit(dbDisconnect(conn))
+                
+                if (is.null(date) || is.na(date)) {
+                        if (update_form) {
+                                clearForm(session)
+                        }
+                        return(NULL)
+                }
                 
                 query <- "SELECT * FROM time_entries 
               WHERE user_id = $1 AND date = $2 AND is_current = TRUE"
@@ -713,20 +736,16 @@ server <- function(input, output, session) {
                 } else {
                         if (update_form) {
                                 # Clear the form if no entry is found
-                                clearForm(session, setDefaultDate = TRUE)
-                        }
+                                clearForm(session)                        }
                         
                         NULL
                 }
         }
         
         # Add a new function to clear the form
-        clearForm <- function(session, setDefaultDate = FALSE) {
-                if (setDefaultDate) {
-                        updateDateInput(session, "date", value = Sys.Date())
-                } else {
-                        updateDateInput(session, "date", value = NULL)
-                }
+        clearForm <- function(session) {
+                updateDateInput(session, "date", value = NULL) 
+                
                 updateTextInput(session, "startTime", value = "")
                 updateTextInput(session, "endTime", value = "")
                 updateTextInput(session, "breakStart", value = "")
@@ -737,6 +756,9 @@ server <- function(input, output, session) {
                         updateCheckboxInput(session, "lunch", value = TRUE)
                 }
                 
+                # Reset the background color of time input fields
+                shinyjs::runjs("$('#startTime').css('background-color', 'white');")
+                shinyjs::runjs("$('#endTime').css('background-color', 'white');")
                 
                 # Reset the calculated work time
                 session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
