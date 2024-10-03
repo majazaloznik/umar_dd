@@ -6,6 +6,7 @@ library(lubridate)
 library(shinyTime)
 library(hms)
 library(shinyjs)
+
 Sys.setenv(TZ = "Europe/Ljubljana")
 
 # Database connection function
@@ -78,6 +79,12 @@ ui <- fluidPage(
             }
         "))
         ),
+        tags$script(" 
+  $(document).on('keydown', '#date', function(e) {
+    e.preventDefault();
+    return false;
+  });
+"), #prevents enterind dates manually
         tags$script("
         Shiny.addCustomMessageHandler('updateInputStyle', function(message) {
             $('#' + message.id).css('background-color', message.style.split(':')[1].trim());
@@ -182,7 +189,10 @@ server <- function(input, output, session) {
                                          column(10,
                                                 fluidRow(
                                                         column(5,  # First column (narrower)
-                                                               dateInput("date", "Datum", value = Sys.Date(), weekstart = 1, format = "dd.mm.yyyy", daysofweekdisabled = c(0, 6), language = "sl"),
+                                                               # shinyWidgets::airDatepickerInput("date", "Datum", value = NULL, firstDay = 1, 
+                                                               #                                  dateFormat = "dd.MM.yyyy", disabledDaysOfWeek = c(0, 6), 
+                                                               #                                  language = "en", readonly = TRUE),
+                                                               dateInput("date", "Datum", value = NULL, weekstart = 1, format = "dd.mm.yyyy", daysofweekdisabled = c(0, 6), language = "sl"),
                                                                timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
                                                                timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE),                                                               timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
                                                                timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
@@ -192,7 +202,7 @@ server <- function(input, output, session) {
                                                         column(7,  # Second column (wider)
                                                                textAreaInput("tasks", "Poročilo o opravljenem delu", value = "", rows = 10),
                                                                textAreaInput("notes", "Dodatne opombe za špico", value = "", rows = 5),
-                                                               checkboxInput("lunch", "Malica", value = TRUE)
+                                                               checkboxInput("lunch", "Odmor med delovnim časom (malica)", value = TRUE)
                                                         )
                                                 )
                                          ),
@@ -506,8 +516,8 @@ server <- function(input, output, session) {
                                 title = "Posodobitev obstoječega vnosa",
                                 "Za ta datum že obstaja vnos. Ali ga res želiš posodobiti?",
                                 footer = tagList(
-                                        modalButton("Cancel"),
-                                        actionButton("confirmUpdate", "Update")
+                                        modalButton("Prekliči"),
+                                        actionButton("confirmUpdate", "Posodobi")
                                 )
                         ))
                 } else {
