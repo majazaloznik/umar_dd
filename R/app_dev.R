@@ -109,7 +109,7 @@ ui <- fluidPage(
         tags$footer(
                 tags$hr(),
                 tags$p(
-                        "Špička\U2122 - 2024 - App Version: 0.3.0", 
+                        "Špička\U2122 - 2024 - App Version: 0.5.0", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
                 )
         )
@@ -202,7 +202,8 @@ server <- function(input, output, session) {
                                                         column(7,  # Second column (wider)
                                                                textAreaInput("tasks", "Poročilo o opravljenem delu", value = "", rows = 10),
                                                                textAreaInput("notes", "Dodatne opombe za špico", value = "", rows = 5),
-                                                               checkboxInput("lunch", "Odmor med delovnim časom (malica)", value = TRUE)
+                                                               checkboxInput("lunch", "Odmor med delovnim časom ('malica')", value = TRUE),
+                                                               numericInput("lunchDuration", "Obseg izrabe odmora", value = NULL, min = 0, max = 99, step = 1, width = "100px")
                                                         )
                                                 )
                                          ),
@@ -241,6 +242,30 @@ server <- function(input, output, session) {
                                 )
                         }
                 )
+        })
+        
+        observe({
+                req(credentials())
+                contract_hours <- credentials()$contract_type
+                default_value <- switch(as.character(contract_hours),
+                                        "8" = 30,
+                                        "6" = 22.5,
+                                        "4" = 15,
+                                        0)
+                updateNumericInput(session, "lunchDuration", value = default_value)
+        })
+        
+        observe({
+                req(credentials(), input$lunchDuration)
+                contract_hours <- credentials()$contract_type
+                max_allowed <- switch(as.character(contract_hours),
+                                      "8" = 30,
+                                      "6" = 22.5,
+                                      "4" = 15,
+                                      0)
+                if (input$lunchDuration > max_allowed) {
+                        showNotification("Obseg izrabe odmora presega dovoljeno vrednost. Presežek vnesi kot privatni izhod.", type = "warning")
+                }
         })
         
         time_in_range <- reactive({
@@ -428,10 +453,10 @@ server <- function(input, output, session) {
                 
                 # If it's Monday or Tuesday, include the previous week
                 if (current_weekday <= 2) {
-                        start_of_previous_week <- start_of_week - 7
+                        start_of_previous_week <- start_of_week - 14
                         start_date <- start_of_previous_week
                 } else {
-                        start_date <- start_of_week
+                        start_date <- start_of_week - 7
                 }
                 
                 # Generate a vector of all dates in the range
@@ -599,12 +624,13 @@ server <- function(input, output, session) {
                         as.character(input$tasks),
                         as.character(input$notes),
                         calculated_time,
-                        input$lunch  # Add this line
+                        input$lunch,
+                        input$lunchDuration 
                 )
                 
                 # Insert new entry
-                insert_query <- "INSERT INTO time_entries (user_id, date, start_time, end_time, break_start, break_end, tasks, notes, is_current, entry_timestamp, calculated_time, lunch) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Ljubljana', $9::interval, $10)"
+                insert_query <- "INSERT INTO time_entries (user_id, date, start_time, end_time, break_start, break_end, tasks, notes, is_current, entry_timestamp, calculated_time, lunch, lunch_mins) 
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Ljubljana', $9::interval, $10, $11)"
                 
                 result <- tryCatch({
                         dbExecute(conn, insert_query, params)
