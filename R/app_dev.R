@@ -273,15 +273,27 @@ server <- function(input, output, session) {
                         departure_end <- hms::as_hms(as.numeric(departure_end) - 60 * 60)  # Subtract 1 hour
                 }
                 
-                start_in_range <- if (is.null(start_time)) NULL else 
+                
+                start_in_range <- if (is.null(start_time) || start_time == "") NULL else 
                         !is.null(credentials()$arrival_start) &&
                         start_time >= credentials()$arrival_start && 
                         start_time <= credentials()$arrival_end
                 
-                end_in_range <- if (is.null(end_time)) NULL else 
+                end_in_range <- if (is.null(end_time) || end_time == "") NULL else 
                         !is.null(departure_start) &&
                         end_time >= departure_start && 
                         end_time <= departure_end
+                
+                # Trigger color update
+                shinyjs::runjs(sprintf("
+        var startInput = document.getElementById('startTime');
+        var endInput = document.getElementById('endTime');
+        if (startInput && endInput) {
+            startInput.style.backgroundColor = '%s';
+            endInput.style.backgroundColor = '%s';
+        }
+    ", if (is.null(start_in_range)) "white" else if (start_in_range) "white" else "orange",
+                                       if (is.null(end_in_range)) "white" else if (end_in_range) "white" else "orange"))
                 
                 list(
                         start = start_in_range,
@@ -333,6 +345,11 @@ server <- function(input, output, session) {
                 break_start <- extract_time(input$breakStart)
                 break_end <- extract_time(input$breakEnd)
                 
+                print(paste("WTC Start time:", start_time))
+                print(paste("WTC End time:", end_time))
+                print(paste("WTC Break start:", break_start))
+                print(paste("WTC Break end:", break_end))
+                
                 # If start or end time is not set, return default
                 if (is.null(start_time) || is.null(end_time) || start_time >= end_time) {
                         return(list(time = "-- : --", color = "white"))
@@ -357,6 +374,8 @@ server <- function(input, output, session) {
                 color <- if (abs(total_time - contract_hours) < 0.01) "green" 
                 else if (total_time < contract_hours) "yellow" 
                 else "lightblue"
+                print(paste("WTC Total time:", total_time))
+                print(paste("WTC Color:", color))
                 
                 list(time = sprintf("%02d:%02d", total_hours, total_minutes), color = color)
         })
@@ -737,6 +756,7 @@ server <- function(input, output, session) {
         
         # Add a new function to clear the form
         clearForm <- function(session) {
+                print("Clear form function being called.")
                 updateDateInput(session, "date", value = NULL)
                 
                 updateTextInput(session, "startTime", value = "")
@@ -751,9 +771,10 @@ server <- function(input, output, session) {
                 # Reset the background color of time input fields
                 shinyjs::runjs("$('#startTime').css('background-color', 'white');")
                 shinyjs::runjs("$('#endTime').css('background-color', 'white');")
-                
+                          
                 # Reset the calculated work time
                 session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
+
         }
         
         observeEvent(input$selectDate, {
