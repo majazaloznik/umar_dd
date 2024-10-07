@@ -344,12 +344,7 @@ server <- function(input, output, session) {
                 end_time <- extract_time(input$endTime)
                 break_start <- extract_time(input$breakStart)
                 break_end <- extract_time(input$breakEnd)
-                
-                print(paste("WTC Start time:", start_time))
-                print(paste("WTC End time:", end_time))
-                print(paste("WTC Break start:", break_start))
-                print(paste("WTC Break end:", break_end))
-                
+          
                 # If start or end time is not set, return default
                 if (is.null(start_time) || is.null(end_time) || start_time >= end_time) {
                         return(list(time = "-- : --", color = "white"))
@@ -374,8 +369,6 @@ server <- function(input, output, session) {
                 color <- if (abs(total_time - contract_hours) < 0.01) "green" 
                 else if (total_time < contract_hours) "yellow" 
                 else "lightblue"
-                print(paste("WTC Total time:", total_time))
-                print(paste("WTC Color:", color))
                 
                 list(time = sprintf("%02d:%02d", total_hours, total_minutes), color = color)
         })
@@ -447,44 +440,14 @@ server <- function(input, output, session) {
                 list(start_date = min(all_dates), end_date = max(all_dates))
         }
         
-        
-        # Helper function to validate and format time input
-        validate_time <- function(time_str, field_name) {
-                if (is.null(time_str) || nchar(trimws(time_str)) == 0) {
-                        if (field_name %in% c("Start Time", "End Time")) {
-                                return(list(valid = FALSE, message = paste(field_name, "is required."), value = NULL))
-                        }
-                        return(list(valid = TRUE, message = NULL, value = NULL))
-                }
-                tryCatch({
-                        if (grepl(":", time_str)) {
-                                formatted_time <- format(as.POSIXct(time_str, format = "%H:%M"), "%H:%M:%S")
-                        } else {
-                                formatted_time <- format_time_input(time_str)
-                                formatted_time <- paste0(formatted_time, ":00")
-                        }
-                        return(list(valid = TRUE, message = NULL, value = formatted_time))
-                }, error = function(e) {
-                        return(list(valid = FALSE, message = paste(field_name, "must be in HHMM or HH:MM format."), value = NULL))
-                })
-        }
-        
-        # Helper function to parse time strings
-        parse_time <- function(time_str) {
-                if (is.null(time_str) || time_str == "") return(NA)
-                tryCatch(
-                        as.POSIXct(time_str, format = "%H:%M"),
-                        error = function(e) NA
-                )
-        }
-        
-        format_time_input <- function(time_str) {
+                format_time_input <- function(time_str) {
                 if (is.null(time_str) || nchar(trimws(time_str)) == 0) {
                         return("")
                 }
                 formatted_time <- sprintf("%04d", as.integer(time_str))
                 paste0(substr(formatted_time, 1, 2), ":", substr(formatted_time, 3, 4))
         }
+        
         # helper funciton for report date range
         get_default_date_range <- function() {
                 today <- Sys.Date()
@@ -756,7 +719,6 @@ server <- function(input, output, session) {
         
         # Add a new function to clear the form
         clearForm <- function(session) {
-                print("Clear form function being called.")
                 updateDateInput(session, "date", value = NULL)
                 
                 updateTextInput(session, "startTime", value = "")
