@@ -1,0 +1,111 @@
+---
+title: "Špička - Admin poročilo"
+output:
+  pdf_document:
+    toc: false
+    includes:
+      in_header: footer.tex
+classoption: landscape
+params:
+  start_date: !r Sys.Date() - 21
+  end_date: !r Sys.Date()
+---
+
+```{r getdata, echo = FALSE}
+suppressPackageStartupMessages(library(DBI))
+suppressPackageStartupMessages(library(RPostgres))
+suppressPackageStartupMessages(library(dplyr))
+conn <- dbConnect(RPostgres::Postgres(),
+                  dbname = "umar_dd",
+                  host = "localhost",
+                  port = 5432,
+                  user = "postgres",
+                  password = Sys.getenv("PG_PG_PSW"))
+
+query <- "SELECT * FROM time_entries WHERE date BETWEEN $1 AND $2"
+raw_data <- dbGetQuery(conn, query, params = list(params$start_date, params$end_date))
+
+# Retrieve the employee data from the employees table
+query_employees <- "SELECT id, fullname, contract_type, arrival_start, arrival_end, departure_start, departure_end FROM employees"
+employees <- dbGetQuery(conn, query_employees)
+
+# Merge the data with the employees table
+raw_data <- left_join(raw_data, employees, by = c("user_id" = "id")) |> 
+        select(-user_id)
+
+data <- raw_data  |> 
+        rename( Datum = date,
+                `Ime` = fullname,
+                Prihod = start_time,
+                Odhod = end_time,
+                `Zas. izhod` = break_start,
+                `Zas. prihod` = break_end,
+                `Prisotnost` = calculated_time,
+                contractType = contract_type,
+                arrivalStart = arrival_start,
+                arrivalEnd = arrival_end,
+                departureStart = departure_start,
+                departureEnd = departure_end,
+                `Odmor min.` = lunch_mins,
+                Opombe = notes) |> 
+       filter(is_current == TRUE) |> 
+        select(-id, -tasks, -is_current, -entry_timestamp) |> 
+        relocate(Ime) |> 
+        relocate(Opombe, .after = `Odmor min.`) |> 
+        arrange(Ime, Datum)
+        
+dbDisconnect(conn)
+```
+
+
+```{r, echo = FALSE, results='asis'}
+suppressPackageStartupMessages(library(knitr))
+suppressPackageStartupMessages(library(kableExtra))
+suppressPackageStartupMessages(library(hms))
+
+calculated_hours_background <- ifelse(!is.na(data$contractType) & !is.na(data$Prisotnost) & data$contractType >  as.numeric(as_hms(data$Prisotnost))/3600, "#A10305", ifelse(!is.na(data$contractType) & !is.na(data$Prisotnost) & as.numeric(as_hms(data$Prisotnost))/3600 > data$contractType, "#A10305","black"))
+
+start_time_background <- ifelse(!is.na(data$Prihod) & !is.na(data$arrivalStart) & !is.na(data$arrivalEnd) & (data$Prihod < data$arrivalStart | data$Prihod > data$arrivalEnd),
+                                "#A10305", "black")
+
+end_time_background <- ifelse(!is.na(data$Odhod) & !is.na(data$departureStart) & !is.na(data$departureEnd) & (data$Odhod < data$departureStart | data$Odhod > data$departureEnd),
+                              "#A10305", "black")
+
+# Remove unwanted columns
+final <- data |> 
+        select(-contractType, -arrivalStart, -arrivalEnd, 
+               -departureStart, -departureEnd, -lunch) |> 
+          mutate_all(linebreak) |>  
+        mutate(Datum = format(as.Date(Datum), "%d.%m.%y"),
+               across(c(Prihod, Odhod, `Zas. izhod`, `Zas. prihod`), ~format(as.POSIXct(., format="%H:%M:%S"), "%H:%M")),
+               `Odmor min.` = as.character(`Odmor min.`)) |> 
+        tidyr::replace_na(list(Prihod = "", Odhod = "", `Zas. izhod` = "", `Zas. prihod` = "", Prisotnost = "", `Odmor min.` = "", notes = ""))
+
+        
+
+        
+# Process the data and generate the admin report table
+admin_report_table <- kable(final, format = "latex", escape = FALSE, booktabs = TRUE, longtable = TRUE) %>%
+  kable_styling(latex_options = c("hold_position", "repeat_header", "striped"))
+
+
+admin_report_table <- admin_report_table %>%
+  column_spec(1, width = "3cm") %>%  # Ime
+  column_spec(2, width = "2cm") %>%  # Datum
+  column_spec(3, width = "1.5cm") %>%  # Prihod
+  column_spec(4, width = "1.5cm") %>%  # Odhod
+  column_spec(5, width = "1.5cm") %>%  # Zas. izhod
+  column_spec(6, width = "1.5cm") %>%  # Zas. prihod
+  column_spec(7, width = "1.5cm") %>%  # Prisotnost
+  column_spec(8, width = "1.5cm") %>%  # Odmor min.
+  column_spec(9, width = "5cm")  # notes
+
+# Apply conditional formatting to the table
+admin_report_table <- admin_report_table %>%
+  column_spec(7, color = calculated_hours_background) %>%
+  column_spec(3, color = start_time_background) %>%
+  column_spec(4, color = end_time_background)
+
+admin_report_table
+
+```
