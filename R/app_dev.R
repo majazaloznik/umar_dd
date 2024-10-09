@@ -77,8 +77,18 @@ ui <- fluidPage(
                 margin-bottom: 15px;
                 border-bottom: 1px solid #dee2e6;
             }
+            #startTime, #endTime {
+            width: 80%; /* Adjust this value as needed */
+            max-width: 150px; /* Adjust as needed */
+            border-radius: 5px; /* Rounded corners */
+        }
         "))
         ),
+        tags$script(HTML("
+    Shiny.addCustomMessageHandler('openPDF', function(filename) {
+      window.open(filename, '_blank');
+    });
+  ")),
         tags$script(" 
   $(document).on('keydown', '#date', function(e) {
     e.preventDefault();
@@ -120,8 +130,9 @@ server <- function(input, output, session) {
         credentials <- reactiveVal(NULL)
         entry_update <- reactiveVal(0)
         just_logged_in <- reactiveVal(FALSE)
+        print(getwd())
         
-        # Login UI
+         # Login UI
         output$loginUI <- renderUI({
                 if (is.null(credentials())) {
                         wellPanel(
@@ -208,7 +219,9 @@ server <- function(input, output, session) {
                                                 )
                                          ),
                                          column(2,  # Third column (narrowest)
-                                                uiOutput("calculatedWorkTime"),
+                                                div(style = "margin-top: 20px;", 
+                                                    uiOutput("calculatedWorkTime")
+                                                ),
                                                 br(),
                                                 actionButton("submit", "Oddaj/posodobi", width = "100%"),
                                                 br(),
@@ -318,8 +331,8 @@ server <- function(input, output, session) {
             startInput.style.backgroundColor = '%s';
             endInput.style.backgroundColor = '%s';
         }
-    ", if (is.null(start_in_range)) "white" else if (start_in_range) "white" else "orange",
-                                       if (is.null(end_in_range)) "white" else if (end_in_range) "white" else "orange"))
+    ", if (is.null(start_in_range)) "white" else if (start_in_range) "white" else "#eb9776",
+                                       if (is.null(end_in_range)) "white" else if (end_in_range) "white" else "#eb9776"))
                 
                 list(
                         start = start_in_range,
@@ -328,7 +341,7 @@ server <- function(input, output, session) {
         })
         
         update_time_input_style <- function(session, inputId, in_range) {
-                color <- if(is.null(in_range)) NULL else if(in_range) "white" else "orange"
+                color <- if(is.null(in_range)) NULL else if(in_range) "white" else "#eb9776"
                 shinyjs::runjs(sprintf("
         var input = document.getElementById('%s');
         if (input) {
@@ -392,9 +405,9 @@ server <- function(input, output, session) {
                 contract_hours <- credentials()$contract_type
                 
                 # Determine color based on contract hours
-                color <- if (abs(total_time - contract_hours) < 0.01) "green" 
+                color <- if (abs(total_time - contract_hours) < 0.01) "#64af80" 
                 else if (total_time < contract_hours) "yellow" 
-                else "lightblue"
+                else "#add8e6"
                 
                 list(time = sprintf("%02d:%02d", total_hours, total_minutes), color = color)
         })
@@ -402,7 +415,13 @@ server <- function(input, output, session) {
         output$calculatedWorkTime <- renderUI({
                 result <- workTimeCalc()
                 div(
-                        style = paste("background-color:", result$color, "; padding: 20px; border-radius: 10px; text-align: center;"),
+                        style = paste("background-color:", result$color, 
+                                      "; padding: 5px;", # Reduced padding
+                                      "border-radius: 10px;", # Smaller border radius
+                                      "text-align: center;",
+                                      "width: 85%;", # Reduced width
+                                      "height: 85%;", # Reduced width
+                                      "margin: 0 auto;"), # Center the div
                         h4("Skupna prisotnost:"),
                         h2(result$time, style = "font-weight: bold;"),
                         textOutput("contractHours")
@@ -443,6 +462,8 @@ server <- function(input, output, session) {
                         p(paste("Napaka pri pridobivanju podatkov:", e$message))
                 })
         })
+        
+
         
         # Helper function to get the date range for allowed entries, excluding weekends
         get_allowed_date_range <- function() {
@@ -650,16 +671,66 @@ server <- function(input, output, session) {
         observeEvent(input$clear, {
                 clearForm(session)
         })
+
+        render_admin_report <- function(start_date, end_date) {
+                output_file <- paste0("admin_report_", format(Sys.Date(), "%Y%m%d"), ".pdf")
+                www_dir <- file.path(getwd(), "www")
+                if (!dir.exists(www_dir)) dir.create(www_dir)
+                output_path <- file.path(www_dir, output_file)
+                
+                tryCatch({
+                        result <- rmarkdown::render(
+                                input = "../docs/admin_report.Rmd",
+                                output_file = output_path,
+                                params = list(
+                                        start_date = start_date,
+                                        end_date = end_date
+                                ),
+                                envir = new.env()
+                        )
+                        print(paste("Render result:", result))  # Debug print
+                        return(output_file)  # Return just the filename
+                }, error = function(e) {
+                        print(paste("Error rendering report:", e$message))
+                        return(NULL)
+                })
+        }
+        
+       
+        # Event handler for generating and downloading admin report
         
         observeEvent(input$generate_admin_report, {
                 req(credentials()$permissions == "admin")
-                # Placeholder for admin report generation
-                showNotification("Generiranje admin poročila...", type = "message")
-                # Here you would add the logic to generate the admin report
-                # For now, we'll just show a message
-                Sys.sleep(2)  # Simulate report generation time
-                showNotification("Admin poročilo generirano!", type = "message")
+                
+                # Show a progress notification
+                withProgress(message = 'Generiranje poročila...', value = 0, {
+                        
+                        # Increment the progress bar
+                        incProgress(0.1, detail = "Pripravljanje podatkov")
+                        
+                        # Get the date range
+                        start_date <- input$report_date_range[1]
+                        end_date <- input$report_date_range[2]
+                        
+                        # Increment the progress bar
+                        incProgress(0.6, detail = "Renderiranje pdf-ja")
+                        
+                        # Generate the report
+                        report_filename <- render_admin_report(start_date, end_date)
+                        
+                        # Increment the progress bar
+                        incProgress(0.3, detail = "Še zadnje malenkosti")
+                        
+                        if (!is.null(report_filename)) {
+                                # Open the PDF in a new tab
+                                session$sendCustomMessage("openPDF", report_filename)
+                                showNotification("Poročilo je bilo uspešno generirano.", type = "message")
+                        } else {
+                                showNotification("Hm, nekje se je zataknilo. Mogoče poskusi še enkrat, sicer pa pokliči Majo..", type = "error")
+                        }
+                })
         })
+        
         
         observeEvent(input$generate_head_report, {
                 req(credentials()$permissions == "head")
