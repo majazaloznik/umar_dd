@@ -1,5 +1,6 @@
 ---
 title: "Špička - Admin poročilo"
+subtitle: "`r format(as.Date(params$start_date), '%d.%m.%Y')`  - `r format(as.Date(params$end_date), '%d.%m.%Y')`"
 output:
   pdf_document:
     toc: false
@@ -11,10 +12,18 @@ params:
   end_date: !r Sys.Date()
 ---
 
-```{r getdata, echo = FALSE}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r getdata}
 suppressPackageStartupMessages(library(DBI))
 suppressPackageStartupMessages(library(RPostgres))
 suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(stringi))
+
 conn <- dbConnect(RPostgres::Postgres(),
                   dbname = "umar_dd",
                   host = "localhost",
@@ -29,9 +38,10 @@ raw_data <- dbGetQuery(conn, query, params = list(params$start_date, params$end_
 query_employees <- "SELECT id, fullname, contract_type, arrival_start, arrival_end, departure_start, departure_end FROM employees"
 employees <- dbGetQuery(conn, query_employees)
 
-# Merge the data with the employees table
 raw_data <- left_join(raw_data, employees, by = c("user_id" = "id")) |> 
         select(-user_id)
+
+# Merge the data with the employees table
 
 data <- raw_data  |> 
         rename( Datum = date,
@@ -46,65 +56,78 @@ data <- raw_data  |>
                 arrivalEnd = arrival_end,
                 departureStart = departure_start,
                 departureEnd = departure_end,
-                `Odmor min.` = lunch_mins,
+                `Odmor` = lunch_mins,
                 Opombe = notes) |> 
        filter(is_current == TRUE) |> 
         select(-id, -tasks, -is_current, -entry_timestamp) |> 
         relocate(Ime) |> 
-        relocate(Opombe, .after = `Odmor min.`) |> 
-        arrange(Ime, Datum)
-        
+        relocate(Opombe, .after = `Odmor`) |> 
+        mutate(odmor_check = ifelse(contractType == 8, 30,
+                                    ifelse(contractType == 6, 22.5,
+                                           ifelse(contractType == 4, 15, NA)))) |> 
+        filter(!is.na(Ime)) |> 
+        mutate(sort_key = stringi::stri_trans_general(Ime, "Latin-ASCII")) |> 
+        arrange(sort_key, Datum) |> 
+        select(-sort_key)
+
+
 dbDisconnect(conn)
 ```
 
 
-```{r, echo = FALSE, results='asis'}
+```{r, results='asis'}
 suppressPackageStartupMessages(library(knitr))
 suppressPackageStartupMessages(library(kableExtra))
 suppressPackageStartupMessages(library(hms))
+suppressPackageStartupMessages(library(forcats))
 
-calculated_hours_background <- ifelse(!is.na(data$contractType) & !is.na(data$Prisotnost) & data$contractType >  as.numeric(as_hms(data$Prisotnost))/3600, "#A10305", ifelse(!is.na(data$contractType) & !is.na(data$Prisotnost) & as.numeric(as_hms(data$Prisotnost))/3600 > data$contractType, "#A10305","black"))
+
+calculated_hours_background <- ifelse(!is.na(data$contractType) & !is.na(data$Prisotnost) & data$contractType >  as.numeric(as_hms(data$Prisotnost))/3600, "#D46565", ifelse(!is.na(data$contractType) & !is.na(data$Prisotnost) & as.numeric(as_hms(data$Prisotnost))/3600 > data$contractType, "#D46565","black"))
 
 start_time_background <- ifelse(!is.na(data$Prihod) & !is.na(data$arrivalStart) & !is.na(data$arrivalEnd) & (data$Prihod < data$arrivalStart | data$Prihod > data$arrivalEnd),
-                                "#A10305", "black")
+                                "#D46565", "black")
 
 end_time_background <- ifelse(!is.na(data$Odhod) & !is.na(data$departureStart) & !is.na(data$departureEnd) & (data$Odhod < data$departureStart | data$Odhod > data$departureEnd),
-                              "#A10305", "black")
+                              "#D46565", "black")
+
+lunch_background <- ifelse(!is.na(data$Odmor) & !is.na(data$odmor_check) & (data$Odmor < data$odmor_check), "#D46565", "black")
+
+
 
 # Remove unwanted columns
 final <- data |> 
         select(-contractType, -arrivalStart, -arrivalEnd, 
-               -departureStart, -departureEnd, -lunch) |> 
+               -departureStart, -departureEnd, -lunch, -odmor_check) |> 
           mutate_all(linebreak) |>  
         mutate(Datum = format(as.Date(Datum), "%d.%m.%y"),
-               across(c(Prihod, Odhod, `Zas. izhod`, `Zas. prihod`), ~format(as.POSIXct(., format="%H:%M:%S"), "%H:%M")),
-               `Odmor min.` = as.character(`Odmor min.`)) |> 
-        tidyr::replace_na(list(Prihod = "", Odhod = "", `Zas. izhod` = "", `Zas. prihod` = "", Prisotnost = "", `Odmor min.` = "", notes = ""))
-
-        
+               across(c(Prihod, Odhod, `Zas. izhod`, `Zas. prihod`, Prisotnost), ~format(as.POSIXct(., format="%H:%M:%S"), "%H:%M")),
+               `Odmor` = as.character(`Odmor`)) |> 
+        tidyr::replace_na(list(Prihod = "", Odhod = "", `Zas. izhod` = "", `Zas. prihod` = "", Prisotnost = "", `Odmor` = "", notes = ""))
 
         
 # Process the data and generate the admin report table
-admin_report_table <- kable(final, format = "latex", escape = FALSE, booktabs = TRUE, longtable = TRUE) %>%
-  kable_styling(latex_options = c("hold_position", "repeat_header", "striped"))
-
-
-admin_report_table <- admin_report_table %>%
-  column_spec(1, width = "3cm") %>%  # Ime
-  column_spec(2, width = "2cm") %>%  # Datum
-  column_spec(3, width = "1.5cm") %>%  # Prihod
-  column_spec(4, width = "1.5cm") %>%  # Odhod
-  column_spec(5, width = "1.5cm") %>%  # Zas. izhod
-  column_spec(6, width = "1.5cm") %>%  # Zas. prihod
-  column_spec(7, width = "1.5cm") %>%  # Prisotnost
-  column_spec(8, width = "1.5cm") %>%  # Odmor min.
-  column_spec(9, width = "5cm")  # notes
+admin_report_table <- kable(final[,-1], format = "latex", escape = FALSE, booktabs = TRUE, longtable = TRUE) |>
+  kable_styling(latex_options = c("hold_position", "repeat_header", "striped")) |> 
+        pack_rows(index = table(fct_inorder(final$Ime)))
 
 # Apply conditional formatting to the table
-admin_report_table <- admin_report_table %>%
-  column_spec(7, color = calculated_hours_background) %>%
-  column_spec(3, color = start_time_background) %>%
-  column_spec(4, color = end_time_background)
+admin_report_table <- admin_report_table |>
+  column_spec(6, color = calculated_hours_background) |>
+  column_spec(2, color = start_time_background) |>
+  column_spec(3, color = end_time_background) |> 
+        column_spec(7, color = lunch_background) 
+
+admin_report_table <- admin_report_table |>
+  column_spec(1, width = "2.5cm") |>  # Datum
+  column_spec(2, width = "1.7cm") |>  # Prihod
+  column_spec(3, width = "2cm") |>  # Odhod
+  column_spec(4, width = "1.7cm") |>  # Zas. izhod
+  column_spec(5, width = "2cm") |>  # Zas. prihod
+  column_spec(6, width = "1.5cm") |>  # Prisotnost
+  column_spec(7, width = "1.3cm") |>  # Odmor
+  column_spec(8, width = "6.5cm")  # notes
+
+
 
 admin_report_table
 
