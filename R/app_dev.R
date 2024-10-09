@@ -255,6 +255,7 @@ server <- function(input, output, session) {
                 updateNumericInput(session, "lunchDuration", value = default_value)
         })
         
+        
         observe({
                 req(credentials(), input$lunchDuration)
                 contract_hours <- credentials()$contract_type
@@ -499,7 +500,6 @@ server <- function(input, output, session) {
                 req(credentials())
                 
                 entry <- get_entry_details(input$date)
-                
                 if (!is.null(entry)) {
                         # Populate form with existing entry data
                         updateTimeInput(session, "startTime", value = entry$start_time)
@@ -509,6 +509,7 @@ server <- function(input, output, session) {
                         updateTextAreaInput(session, "tasks", value = entry$tasks)
                         updateTextAreaInput(session, "notes", value = entry$notes)
                         updateCheckboxInput(session, "lunch", value = as.logical(entry$lunch))
+                        updateNumericInput(session, "lunchDuration", value = entry$lunch_mins)
                         
                         # Trigger recalculation of work time
                         session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
@@ -517,11 +518,115 @@ server <- function(input, output, session) {
                         clearForm(session)
                 }
         })
+        
         # Submit new entry
         observeEvent(input$submit, {
                 req(credentials())
                 
-                # Check for existing entry
+                # Validation checks
+                if (is.null(input$date) || is.na(input$date)) {
+                        showModal(modalDialog(
+                                title = "Napaka: Neveljaven datum",
+                                "Prosim, izberite veljaven datum.",
+                                footer = modalButton("Razumem"),
+                                easyClose = TRUE
+                        ))
+                        return()
+                }
+                
+                start_time <- strftime(input$startTime, "%H:%M:%S")
+                end_time <- strftime(input$endTime, "%H:%M:%S")
+                
+                if (start_time == "00:00:00" || end_time == "00:00:00" || start_time >= end_time) {
+                        showModal(modalDialog(
+                                title = "Napaka: Neveljaven čas",
+                                "Prosim, vnesite veljaven čas začetka in konca. Čas konca mora biti po času začetka.",
+                                footer = modalButton("Razumem"),
+                                easyClose = TRUE
+                        ))
+                        return()
+                }
+                
+                break_start <- strftime(input$breakStart, "%H:%M:%S")
+                break_end <- strftime(input$breakEnd, "%H:%M:%S")
+                
+                if ((break_start != "00:00:00" && break_end == "00:00:00") || 
+                    (break_start == "00:00:00" && break_end != "00:00:00")) {
+                        showModal(modalDialog(
+                                title = "Napaka: Neveljaven čas odmora",
+                                "Prosim, vnesite oba časa odmora ali pustite oba prazna.",
+                                footer = modalButton("Razumem"),
+                                easyClose = TRUE
+                        ))
+                        return()
+                }
+                
+                if ((break_start != "00:00:00" && break_end == "00:00:00") &&
+                    (break_start < start_time || break_end > end_time)) {
+                        showModal(modalDialog(
+                                title = "Napaka: Čas odmora izven delovnega časa",
+                                "Čas odmora mora biti znotraj delovnega časa (med časom začetka in konca dela).",
+                                footer = modalButton("Razumem"),
+                                easyClose = TRUE
+                        ))
+                        return()
+                }
+                
+                if (break_start != "00:00:00" && break_end != "00:00:00" && break_start >= break_end) {
+                        showModal(modalDialog(
+                                title = "Napaka: Neveljaven čas odmora",
+                                "Čas začetka odmora mora biti pred časom konca odmora.",
+                                footer = modalButton("Razumem"),
+                                easyClose = TRUE
+                        ))
+                        return()
+                }
+                
+                # Calculate total time
+                total_time <- as.numeric(difftime(as.POSIXct(end_time, format="%H:%M:%S"),
+                                                  as.POSIXct(start_time, format="%H:%M:%S"),
+                                                  units="hours"))
+                
+                # Handle break times if both are set and valid
+                if (break_start != "00:00:00" && break_end != "00:00:00") {
+                        break_time <- as.numeric(difftime(as.POSIXct(break_end, format="%H:%M:%S"),
+                                                          as.POSIXct(break_start, format="%H:%M:%S"), 
+                                                          units = "hours"))
+                        total_time <- total_time - break_time
+                }
+                
+                if (total_time <= 0) {
+                        showModal(modalDialog(
+                                title = "Napaka: Neveljaven delovni čas",
+                                "Skupni delovni čas mora biti večji od nič.",
+                                footer = modalButton("Razumem"),
+                                easyClose = TRUE
+                        ))
+                        return()
+                }
+                
+                # Check lunch duration
+                contract_hours <- credentials()$contract_type
+                max_allowed <- switch(as.character(contract_hours),
+                                      "8" = 30,
+                                      "6" = 22.5,
+                                      "4" = 15,
+                                      0)
+                
+                if (input$lunchDuration > max_allowed) {
+                        showModal(modalDialog(
+                                title = "Opozorilo: Predolg odmor",
+                                paste("Obseg izrabe odmora (", input$lunchDuration, " minut) presega dovoljeno vrednost (", max_allowed, " minut).",
+                                      "Presežek vnesi kot privatni izhod. Spremeni vrednost odmora pred oddajo."),
+                                footer = modalButton("Razumem"),
+                                easyClose = TRUE
+                        ))
+                } else {
+                        proceedWithSubmission()
+                }
+        })
+        # Function to proceed with submission
+        proceedWithSubmission <- function() {
                 conn <- get_db_connection()
                 on.exit(dbDisconnect(conn))
                 
@@ -540,7 +645,7 @@ server <- function(input, output, session) {
                 } else {
                         insertEntry()
                 }
-        })
+        }
         
         observeEvent(input$clear, {
                 clearForm(session)
@@ -719,6 +824,7 @@ server <- function(input, output, session) {
                 result <- dbGetQuery(conn, query, list(credentials()$user_id, date))
                 
                 if (nrow(result) > 0) {
+        
                         if (update_form) {
                                 updateDateInput(session, "date", value = result$date)
                                 updateTimeInput(session, "startTime", value = result$start_time)
@@ -728,7 +834,7 @@ server <- function(input, output, session) {
                                 updateTextAreaInput(session, "tasks", value = result$tasks)
                                 updateTextAreaInput(session, "notes", value = result$notes)
                                 updateCheckboxInput(session, "lunch", value = as.logical(result$lunch)) 
-                                
+                                updateNumericInput(session, "lunchDuration", value = result$lunch_mins)
                                 # Trigger recalculation of work time
                                 session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
                         }
@@ -756,6 +862,14 @@ server <- function(input, output, session) {
                 if (is.null(input$lunch)) {
                         updateCheckboxInput(session, "lunch", value = TRUE)
                 }
+                req(credentials())
+                contract_hours <- credentials()$contract_type
+                default_value <- switch(as.character(contract_hours),
+                                        "8" = 30,
+                                        "6" = 22.5,
+                                        "4" = 15,
+                                        0)
+                updateNumericInput(session, "lunchDuration", value = default_value)
                 # Reset the background color of time input fields
                 shinyjs::runjs("$('#startTime').css('background-color', 'white');")
                 shinyjs::runjs("$('#endTime').css('background-color', 'white');")
