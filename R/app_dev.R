@@ -119,7 +119,7 @@ ui <- fluidPage(
         tags$footer(
                 tags$hr(),
                 tags$p(
-                        "Špička\U2122 - 2024 - App Version: 0.5.0", 
+                        "Špička\U2122 - 2024 - App Version: 0.6.0", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
                 )
         )
@@ -130,8 +130,7 @@ server <- function(input, output, session) {
         credentials <- reactiveVal(NULL)
         entry_update <- reactiveVal(0)
         just_logged_in <- reactiveVal(FALSE)
-        print(getwd())
-        
+
          # Login UI
         output$loginUI <- renderUI({
                 if (is.null(credentials())) {
@@ -575,14 +574,14 @@ server <- function(input, output, session) {
                     (break_start == "00:00:00" && break_end != "00:00:00")) {
                         showModal(modalDialog(
                                 title = "Napaka: Neveljaven čas odmora",
-                                "Prosim, vnesite oba časa odmora ali pustite oba prazna.",
+                                "Prosim, vnesi oba časa odmora ali pusti oba prazna.",
                                 footer = modalButton("Razumem"),
                                 easyClose = TRUE
                         ))
                         return()
                 }
-                
-                if ((break_start != "00:00:00" && break_end == "00:00:00") &&
+
+                if ((break_start != "00:00:00" && break_end != "00:00:00") &&
                     (break_start < start_time || break_end > end_time)) {
                         showModal(modalDialog(
                                 title = "Napaka: Čas odmora izven delovnega časa",
@@ -713,13 +712,13 @@ server <- function(input, output, session) {
                         end_date <- input$report_date_range[2]
                         
                         # Increment the progress bar
-                        incProgress(0.6, detail = "Renderiranje pdf-ja")
+                        incProgress(0.4, detail = "Renderiranje pdf-ja")
                         
                         # Generate the report
                         report_filename <- render_admin_report(start_date, end_date)
                         
                         # Increment the progress bar
-                        incProgress(0.3, detail = "Še zadnje malenkosti")
+                        incProgress(0.5, detail = "Še zadnje malenkosti")
                         
                         if (!is.null(report_filename)) {
                                 # Open the PDF in a new tab
