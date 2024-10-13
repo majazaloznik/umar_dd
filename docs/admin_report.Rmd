@@ -3,6 +3,7 @@ title: "Špička - Admin poročilo"
 subtitle: "`r format(as.Date(params$start_date), '%d.%m.%Y')`  - `r format(as.Date(params$end_date), '%d.%m.%Y')`"
 output:
   pdf_document:
+    keep_tex:  true          
     toc: false
     includes:
       in_header: footer.tex

@@ -1,0 +1,96 @@
+---
+title: "Špička - Navodila za uporabnike"
+subtitle: "Vnašanje poročil o delu od doma"
+output:
+        pdf_document:
+                 extra_dependencies: ["float"]
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+# Uvod
+
+Špička je dostopna preko brskalnika na povezavi [http://192.168.38.21:3838](http://192.168.38.21:3838). **Za delovanje moraš biti prijavljen v HKOM.**
+
+# Prijava
+
+Uporabniško ime je sestavljeno iz prve črke imena in (prvega dela) priimka, npr. `mzaloznik`. ^[Če hočeš drugačno uporabniško ime, pridi do Maje Z. in se zmenimo.]
+
+Geslo je po defaultu 123, po prvi prijavi je priporočljivo, da si ga spremenite. 
+
+```{r, fig.cap="Prijava", out.width="80%", fig.align="center", fig.pos="h!"}
+knitr::include_graphics("01.png")
+```
+
+\newpage
+# Nov vnos
+
+Za nov vnos najprej na koledarju izberi datum za katerega želiš vnesti poročilo
+
+```{r, fig.cap="Izbira datuma", out.width="50%", fig.align="center", fig.pos="h!"}
+knitr::include_graphics("02.png")
+```
+
+## Obvezna polja
+
+Obvezen je vnos prihoda in odhoda na delo in poročila o opravljenih nalogah. 
+
+Po pravilnem vnosu prihoda in odhoda se avtomatično prikaže izračun skupne prisotnosti. Pri tem barva podlage označuje ali je prisotnost enaka X-urnemu delavniku na tvoji pogodbi, ali je večja ali manjša. V spodnjem primeru je večja:
+
+```{r, fig.cap="Pravilen vnos prisotnosti", out.width="80%", fig.align="center", fig.pos="h!"}
+knitr::include_graphics("03.png")
+```
+
+Vnesti je mogoče tudi prihod ali odhod zunaj dovoljenega časa, kar pomeni, da je šlo za predčasni prihod/odhod. V tem primeru se bo opozorilno obarvalo ozadje. Tak vnos je še vedno mogoče oddati, opozorilna barva je namenjena preprečevanju napak in pa kot opozorilo, da moraš oddati ustrezno vlogo v špici in to tudi napisati v opombe. 
+
+```{r, fig.cap="Prihod/odhod zunaj dovoljenega časa", out.width="40%", fig.align="center", fig.pos="h!"}
+knitr::include_graphics("04.png")
+```
+
+Poročilo o opravljenem delu vneseš v veliko polje na sredini. To je običajen vnos in zdaj že lahko klikneš na gumb `Oddaj/posodobi` na desni strani. Aplikacija te bo opozorila, če je karkoli narobe. 
+
+```{r, fig.cap="Vnos opravljenih nalog", out.width="95%", fig.align="center", fig.pos="h!"}
+knitr::include_graphics("05.png")
+```
+
+## Dodatna polja
+
+`Začetek` in `konec privatnega izhoda` sta polji namenjeni izhodu, ki ni odmor za malico in se torej odšteje od skupne prisotnosti. Vnešene ure morajo seveda biti znotraj prihoda in odhoda na delo. 
+
+`Dodatne opombe za špico` je polje napišeš, če so bile potrebne tudi kakšne dodatne vloge v špici npr. če gre za delo od doma po urah, če si oddal vlogo za predčasni odhod ali kaj podobnega.
+
+`Odmor med delovnim časom (malica)` in `Obseg izrabe odmora` sta avtomatično izpolnjeni polji. Če želiš lahko čas tega odmora tudi skrajšaš ali celo zbrišeš kljukico, ampat to ne vpliva na izračun skupne prisotnosti. 
+
+
+```{r, fig.cap="Dodatna polja", out.width="95%", fig.align="center", fig.pos="h!"}
+knitr::include_graphics("06.png")
+```
+
+\newpage
+# Popravljanje obstoječega vnosa
+
+Če se pri oddaji poročila zmotiš, lako obstoječi vnos tudi popraviš. **V bazi bodo shranjeni vsi vnosi, da je zagotovljena sledljivost sprememb.**
+
+Spremembo narediš tako, da v koledarju izbereš datum, ki ga želiš spremeniti. Forma se bo izpolnila z vrednostmi, ki si jih nazadnje vnesel. Spodaj se bo tudi videla zgodovina sprememb.
+
+```{r, fig.cap="Zgodovina sprememb", out.width="45%", fig.align="center", fig.pos="h!"}
+knitr::include_graphics("07.png")
+```
+
+
+Vnos posodobiš podobno kot delaš nov vnos: izpolniš oz. popraviš ustrezna polja in klikneš na gumb `Oddaj/posodobi`. Tokrat te bo Špička opozorila, da popravljaš obstoječ vnos in vprašala, če si res prepričan. 
+
+```{r, fig.cap="Posodobitev vnosa", out.width="80%", fig.align="center", fig.pos="h!"}
+knitr::include_graphics("08.png")
+```
+
+
+# Spreminjanje gesla
+
+Na drugem zavihku imaš polja za spremembo gesla.^[Če slučajno pozabiš novo geslo, pridi do Maje Z., pa se zmenimo..]
+
+
+```{r, fig.cap="Sprememba gesla", out.width="45%", fig.align="center", fig.pos="h!"}
+knitr::include_graphics("09.png")
+```
+
