@@ -77,10 +77,31 @@ ui <- fluidPage(
                 margin-bottom: 15px;
                 border-bottom: 1px solid #dee2e6;
             }
+            #header-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
+            #logo-name-container {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+        }
+            #app-logo {
+            width: 75px;  
+            height: auto;
+            margin-right: 10px;
+        }
+            #user-fullname {
+            font-weight: bold;
+            text-align: center;
+            flex-grow: 1;
+        }
             #startTime, #endTime {
-            width: 80%; /* Adjust this value as needed */
-            max-width: 150px; /* Adjust as needed */
-            border-radius: 5px; /* Rounded corners */
+            width: 80%;
+            max-width: 150px; 
+            border-radius: 5px; 
         }
         "))
         ),
@@ -140,9 +161,10 @@ server <- function(input, output, session) {
                                 actionButton("login", "Prijava")
                         )
                 } else {
-                        div(style = "display: flex; justify-content: space-between; align-items: center;",
-                            div(
-                                    p(credentials()$fullname),
+                        div(id = "header-container",
+                            div(id = "logo-name-container",
+                                img(src = "logo.png", id = "app-logo"),
+                                p(id = "user-fullname", credentials()$fullname)
                             ),
                             actionButton("logout", "Odjava")
                         )
@@ -330,7 +352,7 @@ server <- function(input, output, session) {
             startInput.style.backgroundColor = '%s';
             endInput.style.backgroundColor = '%s';
         }
-    ", if (is.null(start_in_range)) "white" else if (start_in_range) "white" else "#eb9776",
+    ", if (is.null(start_in_range)) "white" else if (start_in_range) "white" else "#ff7d9d",
                                        if (is.null(end_in_range)) "white" else if (end_in_range) "white" else "#eb9776"))
                 
                 list(
@@ -340,7 +362,7 @@ server <- function(input, output, session) {
         })
         
         update_time_input_style <- function(session, inputId, in_range) {
-                color <- if(is.null(in_range)) NULL else if(in_range) "white" else "#eb9776"
+                color <- if(is.null(in_range)) NULL else if(in_range) "white" else "#ff7d9d"
                 shinyjs::runjs(sprintf("
         var input = document.getElementById('%s');
         if (input) {
