@@ -140,7 +140,7 @@ ui <- fluidPage(
         tags$footer(
                 tags$hr(),
                 tags$p(
-                        "Špička\U2122 - 2024 - App Version: 1.0.0", 
+                        "Špička\U2122 - 2024 - App Version: 0.6.0", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
                 )
         )
@@ -226,7 +226,7 @@ server <- function(input, output, session) {
                                                                #                                  language = "en", readonly = TRUE),
                                                                dateInput("date", "Datum", value = NULL, weekstart = 1, format = "dd.mm.yyyy", daysofweekdisabled = c(0, 6), language = "sl"),
                                                                timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
-                                                               timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE),                                                               timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
+                                                               timeInput("endTime", "Odhod z dela", value = "", seconds = FALSE),                                                               timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
                                                                timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
                                                                hr(),
                                                                uiOutput("entryHistory")
@@ -257,24 +257,25 @@ server <- function(input, output, session) {
                                  passwordInput("confirm_password", "Potrdi novo geslo"),
                                  actionButton("change_password", "Spremeni geslo")
                         ),
-                        if (credentials()$permissions %in% c("admin", "head")) {
-                                tabPanel("Poročila",
-                                         h3("Generiraj poročilo"),
-                                         dateRangeInput("report_date_range", "Izberi časovno obdobje:",
-                                                        start = default_range$start, 
-                                                        end = default_range$end,
-                                                        min = "2024-09-01",  # Adjust this to your needs
-                                                        max = Sys.Date(),
-                                                        format = "dd.mm.yyyy",
-                                                        language = "sl",
-                                                        weekstart = 1),
-                                         if (credentials()$permissions == "admin") {
-                                                 actionButton("generate_admin_report", "Generiraj admin poročilo")
-                                         } else {
-                                                 actionButton("generate_head_report", "Generiraj poročilo vodje")
-                                         }
-                                )
-                        }
+                        tabPanel("Poročila",
+                                 h3("Generiraj poročilo"),
+                                 dateRangeInput("report_date_range", "Izberi časovno obdobje:",
+                                                start = default_range$start, 
+                                                end = default_range$end,
+                                                min = "2024-09-01",  # Adjust this to your needs
+                                                max = Sys.Date(),
+                                                format = "dd.mm.yyyy",
+                                                language = "sl",
+                                                weekstart = 1),
+                                 if (credentials()$permissions == "admin") {
+                                         actionButton("generate_admin_report", "Generiraj admin poročilo")
+                                 } else if (credentials()$permissions == "vodja") {
+                                         actionButton("generate_head_report", "Generiraj poročilo vodje")
+                                 },
+                                 
+                                 # Employee report button that's always visible
+                                 actionButton("generate_employee_report", "Generiraj svoje poročilo")
+                        )
                 )
         })
         
@@ -717,9 +718,36 @@ server <- function(input, output, session) {
                 })
         }
         
+        render_employee_report <- function(start_date, end_date, user_id) {
+                output_file <- paste0("employee_report_", user_id, "_",format(Sys.Date(), "%Y%m%d"), ".pdf")
+                www_dir <- file.path(getwd(), "www")
+                if (!dir.exists(www_dir)) dir.create(www_dir)
+                output_path <- file.path(www_dir, output_file)
+                
+                tryCatch({
+                        result <- rmarkdown::render(
+                                input = "../docs/employee_report.Rmd",
+                                output_file = output_path,
+                                params = list(
+                                        start_date = start_date,
+                                        end_date = end_date,
+                                        user_id = user_id
+                                ),
+                                envir = new.env()
+                        )
+                        print(paste("Render result:", result))  # Debug print
+                        return(output_file)  # Return just the filename
+                }, error = function(e) {
+                        print(paste("Error rendering report:", e$message))
+                        return(NULL)
+                })
+        }
+        
+        
+        
+        
         
         # Event handler for generating and downloading admin report
-        
         observeEvent(input$generate_admin_report, {
                 req(credentials()$permissions == "admin")
                 
@@ -752,9 +780,40 @@ server <- function(input, output, session) {
                 })
         })
         
-        
+        # Event handler for generating and downloading admin report
+        observeEvent(input$generate_employee_report, {
+                req(credentials())
+                # Show a progress notification
+                withProgress(message = 'Generiranje poročila...', value = 0, {
+                        
+                        # Increment the progress bar
+                        incProgress(0.1, detail = "Pripravljanje podatkov")
+                        
+                        # Get the date range
+                        start_date <- input$report_date_range[1]
+                        end_date <- input$report_date_range[2]
+                        user_id <- credentials()$user_id
+                        
+                        # Increment the progress bar
+                        incProgress(0.4, detail = "Renderiranje pdf-ja")
+                        
+                        # Generate the report
+                        report_filename <- render_employee_report(start_date, end_date, user_id)
+                        
+                        # Increment the progress bar
+                        incProgress(0.5, detail = "Še zadnje malenkosti")
+                        
+                        if (!is.null(report_filename)) {
+                                # Open the PDF in a new tab
+                                session$sendCustomMessage("openPDF", report_filename)
+                                showNotification("Poročilo je bilo uspešno generirano.", type = "message")
+                        } else {
+                                showNotification("Hm, nekje se je zataknilo. Mogoče poskusi še enkrat, sicer pa pokliči Majo Z...", type = "error")
+                        }
+                })
+        })
         observeEvent(input$generate_head_report, {
-                req(credentials()$permissions == "head")
+                req(credentials()$permissions == "vodja")
                 # Placeholder for head report generation
                 showNotification("Generiranje poročila vodje...", type = "message")
                 # Here you would add the logic to generate the head's report
