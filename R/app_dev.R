@@ -25,16 +25,32 @@ get_db_connection <- function() {
         })
 }
 
+safe_db_query <- function(query, params = NULL, fetch = TRUE) {
+        conn <- get_db_connection()
+        if (is.null(conn)) {
+                return(NULL)
+        }
+        tryCatch({
+                if (fetch) {
+                        result <- dbGetQuery(conn, query, params)
+                } else {
+                        result <- dbExecute(conn, query, params)
+                }
+                return(result)
+        }, error = function(e) {
+                message("Database query error: ", e$message)
+                return(NULL)
+        }, finally = {
+                dbDisconnect(conn)
+        })
+}
 # Authentication function
 authenticate <- function(user, password) {
-        conn <- get_db_connection()
-        on.exit(dbDisconnect(conn))
-        
         query <- "SELECT id, username, fullname, contract_type, access, arrival_start, arrival_end, departure_start, departure_end 
               FROM employees WHERE username = $1 AND password = $2"
-        result <- dbGetQuery(conn, query, list(user, password))
+        result <- safe_db_query(query, list(user, password))
         
-        if (nrow(result) == 1) {
+        if (!is.null(result) && nrow(result) == 1) {
                 parse_time_safely <- function(x) {
                         if (is.null(x) || is.na(x) || x == "") return(NULL)
                         tryCatch({
@@ -48,7 +64,7 @@ authenticate <- function(user, password) {
                 credentials <- list(
                         user_auth = TRUE, 
                         user = result$username, 
-                        fullname = as.character(result$fullname),  # Explicitly convert to character
+                        fullname = as.character(result$fullname),
                         user_id = result$id, 
                         contract_type = result$contract_type,
                         permissions = result$access,
@@ -60,7 +76,7 @@ authenticate <- function(user, password) {
                 
                 return(credentials)
         } else {
-                list(user_auth = FALSE)
+                return(list(user_auth = FALSE))
         }
 }
 
@@ -103,7 +119,20 @@ ui <- fluidPage(
             max-width: 150px; 
             border-radius: 5px; 
         }
-        "))
+        ")),
+                tags$script("
+                    Shiny.addCustomMessageHandler('resetUI', function(message) {
+                        window.location.reload();
+                    });
+                "),
+                tags$script(HTML("
+    $(document).on('keydown', '#loginForm', function(e) {
+      if (e.which == 13) {
+        e.preventDefault();
+        $('#login').click();
+      }
+    });
+  "))
         ),
         tags$script(HTML("
     Shiny.addCustomMessageHandler('openPDF', function(filename) {
@@ -155,10 +184,19 @@ server <- function(input, output, session) {
          # Login UI
         output$loginUI <- renderUI({
                 if (is.null(credentials())) {
-                        wellPanel(
-                                textInput("username", "Uporabniško ime"),
-                                passwordInput("password", "Geslo"),
-                                actionButton("login", "Prijava")
+                        tagList(
+                                tags$form(
+                                        id = "loginForm",
+                                        textInput("username", "Uporabniško ime"),
+                                        passwordInput("password", "Geslo"),
+                                        actionButton("login", "Prijava")
+                                ),
+                                tags$script("
+                                    $('#loginForm').on('submit', function(e) {
+                                        e.preventDefault();
+                                        $('#login').click();
+                                    });
+                                ")
                         )
                 } else {
                         div(id = "header-container",
@@ -172,13 +210,15 @@ server <- function(input, output, session) {
         })
         
         # Login logic
+
         observeEvent(input$login, {
+                req(input$username, input$password)
                 user_credentials <- authenticate(input$username, input$password)
                 if (user_credentials$user_auth) {
                         credentials(user_credentials)
                         just_logged_in(TRUE)  
                 } else {
-                        showNotification("Invalid username or password", type = "error")
+                        showNotification("Napačno uporabniško ime ali geslo", type = "error")
                 }
         })
         
@@ -189,12 +229,11 @@ server <- function(input, output, session) {
                 just_logged_in(FALSE)
                 
                 # Clear all inputs
-                lapply(names(input), function(x) updateTextInput(session, x, value = ""))
-                
-                # Clear any ongoing database connections
-                if (exists("conn") && inherits(conn, "DBIConnection")) {
-                        dbDisconnect(conn)
-                }
+                lapply(names(input), function(x) {
+                        if (x != "logout") {  # Avoid clearing the logout button
+                                updateTextInput(session, x, value = "")
+                        }
+                })
                 
                 # Reset the calculated work time output
                 output$calculatedWorkTime <- renderUI({
@@ -205,11 +244,13 @@ server <- function(input, output, session) {
                         )
                 })
                 
-                # Reload the session
-                session$reload()
-                
+                # Show notification
                 showNotification("Uspešna odjava.", type = "message")
+                
+                # Instead of reloading or closing the session, we'll update the UI
+                session$sendCustomMessage(type = "resetUI", message = list())
         })
+        
         
         # Main app logic
         output$mainUI <- renderUI({
@@ -226,7 +267,7 @@ server <- function(input, output, session) {
                                                                #                                  language = "en", readonly = TRUE),
                                                                dateInput("date", "Datum", value = NULL, weekstart = 1, format = "dd.mm.yyyy", daysofweekdisabled = c(0, 6), language = "sl"),
                                                                timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
-                                                               timeInput("endTime", "Odhod iz dela", value = "", seconds = FALSE),                                                               timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
+                                                               timeInput("endTime", "Odhod z dela", value = "", seconds = FALSE),                                                               timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
                                                                timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
                                                                hr(),
                                                                uiOutput("entryHistory")
@@ -257,7 +298,6 @@ server <- function(input, output, session) {
                                  passwordInput("confirm_password", "Potrdi novo geslo"),
                                  actionButton("change_password", "Spremeni geslo")
                         ),
-                        if (credentials()$permissions %in% c("admin", "head")) {
                                 tabPanel("Poročila",
                                          h3("Generiraj poročilo"),
                                          dateRangeInput("report_date_range", "Izberi časovno obdobje:",
@@ -270,11 +310,13 @@ server <- function(input, output, session) {
                                                         weekstart = 1),
                                          if (credentials()$permissions == "admin") {
                                                  actionButton("generate_admin_report", "Generiraj admin poročilo")
-                                         } else {
+                                         } else if (credentials()$permissions == "vodja") {
                                                  actionButton("generate_head_report", "Generiraj poročilo vodje")
-                                         }
+                                         },
+                                         
+                                         # Employee report button that's always visible
+                                         actionButton("generate_employee_report", "Generiraj svoje poročilo")
                                 )
-                        }
                 )
         })
         
@@ -455,33 +497,27 @@ server <- function(input, output, session) {
                         return(p("Ni izbranega datuma."))
                 }
                 
-                conn <- get_db_connection()
-                if (is.null(conn)) {
-                        return(p("Napaka pri povezavi z bazo podatkov. Poskusite znova kasneje."))
-                }
-                on.exit(dbDisconnect(conn))
-                
-                tryCatch({
-                        query <- "SELECT entry_timestamp, is_current 
+                query <- "SELECT entry_timestamp, is_current 
            FROM time_entries 
            WHERE user_id = $1 AND date = $2 
            ORDER BY entry_timestamp DESC"
-                        history <- dbGetQuery(conn, query, list(credentials()$user_id, input$date))
-                        
-                        if (nrow(history) > 0) {
-                                tagList(
-                                        h4("Zgodovina sprememb"),
-                                        lapply(1:nrow(history), function(i) {
-                                                status <- if (history$is_current[i]) "Aktivna" else "Prejšnja"
-                                                p(paste(status, "verzija oddana", history$entry_timestamp[i]))
-                                        })
-                                )
-                        } else {
-                                p("Za ta datum še ni vnosa.")
-                        }
-                }, error = function(e) {
-                        p(paste("Napaka pri pridobivanju podatkov:", e$message))
-                })
+                history <- safe_db_query(query, list(credentials()$user_id, input$date))
+                
+                if (is.null(history)) {
+                        return(p("Napaka pri pridobivanju podatkov. Poskusite znova kasneje."))
+                }
+                
+                if (nrow(history) > 0) {
+                        tagList(
+                                h4("Zgodovina sprememb"),
+                                lapply(1:nrow(history), function(i) {
+                                        status <- if (history$is_current[i]) "Aktivna" else "Prejšnja"
+                                        p(paste(status, "verzija oddana", history$entry_timestamp[i]))
+                                })
+                        )
+                } else {
+                        p("Za ta datum še ni vnosa.")
+                }
         })
         
 
@@ -496,10 +532,10 @@ server <- function(input, output, session) {
                 
                 # If it's Monday or Tuesday, include the previous week
                 if (current_weekday <= 2) {
-                        start_of_previous_week <- start_of_week - 14
+                        start_of_previous_week <- start_of_week - 7
                         start_date <- start_of_previous_week
                 } else {
-                        start_date <- start_of_week - 7
+                        start_date <- start_of_week 
                 }
                 
                 # Generate a vector of all dates in the range
@@ -669,11 +705,13 @@ server <- function(input, output, session) {
         })
         # Function to proceed with submission
         proceedWithSubmission <- function() {
-                conn <- get_db_connection()
-                on.exit(dbDisconnect(conn))
-                
                 check_query <- "SELECT COUNT(*) FROM time_entries WHERE user_id = $1 AND date = $2 AND is_current = TRUE"
-                existing_count <- dbGetQuery(conn, check_query, list(credentials()$user_id, as.Date(input$date)))[[1]]
+                existing_count <- safe_db_query(check_query, list(credentials()$user_id, as.Date(input$date)))[[1]]
+                
+                if (is.null(existing_count)) {
+                        showNotification("Error checking existing entries. Please try again.", type = "error")
+                        return()
+                }
                 
                 if (existing_count > 0) {
                         showModal(modalDialog(
@@ -717,9 +755,36 @@ server <- function(input, output, session) {
                 })
         }
         
-       
-        # Event handler for generating and downloading admin report
+        render_employee_report <- function(start_date, end_date, user_id) {
+                output_file <- paste0("employee_report_", user_id, "_",format(Sys.Date(), "%Y%m%d"), ".pdf")
+                www_dir <- file.path(getwd(), "www")
+                if (!dir.exists(www_dir)) dir.create(www_dir)
+                output_path <- file.path(www_dir, output_file)
+                
+                tryCatch({
+                        result <- rmarkdown::render(
+                                input = "../docs/employee_report.Rmd",
+                                output_file = output_path,
+                                params = list(
+                                        start_date = start_date,
+                                        end_date = end_date,
+                                        user_id = user_id
+                                ),
+                                envir = new.env()
+                        )
+                        print(paste("Render result:", result))  # Debug print
+                        return(output_file)  # Return just the filename
+                }, error = function(e) {
+                        print(paste("Error rendering report:", e$message))
+                        return(NULL)
+                })
+        }
         
+        
+        
+        
+        
+        # Event handler for generating and downloading admin report
         observeEvent(input$generate_admin_report, {
                 req(credentials()$permissions == "admin")
                 
@@ -752,9 +817,40 @@ server <- function(input, output, session) {
                 })
         })
         
-        
+        # Event handler for generating and downloading admin report
+        observeEvent(input$generate_employee_report, {
+                req(credentials())
+                # Show a progress notification
+                withProgress(message = 'Generiranje poročila...', value = 0, {
+                        
+                        # Increment the progress bar
+                        incProgress(0.1, detail = "Pripravljanje podatkov")
+                        
+                        # Get the date range
+                        start_date <- input$report_date_range[1]
+                        end_date <- input$report_date_range[2]
+                        user_id <- credentials()$user_id
+                        
+                        # Increment the progress bar
+                        incProgress(0.4, detail = "Renderiranje pdf-ja")
+                        
+                        # Generate the report
+                        report_filename <- render_employee_report(start_date, end_date, user_id)
+                        
+                        # Increment the progress bar
+                        incProgress(0.5, detail = "Še zadnje malenkosti")
+                        
+                        if (!is.null(report_filename)) {
+                                # Open the PDF in a new tab
+                                session$sendCustomMessage("openPDF", report_filename)
+                                showNotification("Poročilo je bilo uspešno generirano.", type = "message")
+                        } else {
+                                showNotification("Hm, nekje se je zataknilo. Mogoče poskusi še enkrat, sicer pa pokliči Majo Z...", type = "error")
+                        }
+                })
+        })
         observeEvent(input$generate_head_report, {
-                req(credentials()$permissions == "head")
+                req(credentials()$permissions == "vodja")
                 # Placeholder for head report generation
                 showNotification("Generiranje poročila vodje...", type = "message")
                 # Here you would add the logic to generate the head's report
@@ -765,9 +861,6 @@ server <- function(input, output, session) {
         
         # Define a function to insert or update an entry
         insertEntry <- function() {
-                conn <- get_db_connection()
-                on.exit(dbDisconnect(conn))
-                
                 start_time <- strftime(input$startTime, "%H:%M:%S")
                 end_time <- strftime(input$endTime, "%H:%M:%S")
                 
@@ -787,7 +880,7 @@ server <- function(input, output, session) {
                 # Handle break times if both are set and valid
                 if (!is.na(break_start) && !is.na(break_end) && break_start < break_end) {
                         break_time <- as.numeric(difftime(as.POSIXct(break_end, format="%H:%M:%S"),
-                                                          as.POSIXct( break_start, format="%H:%M:%S"), 
+                                                          as.POSIXct(break_start, format="%H:%M:%S"), 
                                                           units = "hours"))
                         total_time <- total_time - break_time
                 }
@@ -797,18 +890,9 @@ server <- function(input, output, session) {
                                            floor(total_time),
                                            round((total_time - floor(total_time)) * 60))
                 
-                # Start transaction
-                dbExecute(conn, "BEGIN")
-                
-                # Check if an entry already exists for this date
-                check_query <- "SELECT COUNT(*) FROM time_entries WHERE user_id = $1 AND date = $2 AND is_current = TRUE"
-                existing_count <- dbGetQuery(conn, check_query, list(credentials()$user_id, as.Date(input$date)))[[1]]
-                
-                if (existing_count > 0) {
-                        # Update: Set the current entry to not current
-                        update_query <- "UPDATE time_entries SET is_current = FALSE WHERE user_id = $1 AND date = $2 AND is_current = TRUE"
-                        dbExecute(conn, update_query, list(credentials()$user_id, as.Date(input$date)))
-                }
+                # Update existing entries
+                update_query <- "UPDATE time_entries SET is_current = FALSE WHERE user_id = $1 AND date = $2 AND is_current = TRUE"
+                safe_db_query(update_query, list(credentials()$user_id, as.Date(input$date)), fetch = FALSE)
                 
                 # Prepare query parameters
                 params <- list(
@@ -829,17 +913,10 @@ server <- function(input, output, session) {
                 insert_query <- "INSERT INTO time_entries (user_id, date, start_time, end_time, break_start, break_end, tasks, notes, is_current, entry_timestamp, calculated_time, lunch, lunch_mins) 
                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Ljubljana', $9::interval, $10, $11)"
                 
-                result <- tryCatch({
-                        dbExecute(conn, insert_query, params)
-                }, error = function(e) {
-                        print(paste("Error in submit query:", e$message))
-                        dbExecute(conn, "ROLLBACK")
-                        return(NULL)
-                })
+                result <- safe_db_query(insert_query, params, fetch = FALSE)
                 
                 if (!is.null(result) && result == 1) {
-                        dbExecute(conn, "COMMIT")
-                        showNotification(ifelse(existing_count > 0, "Vnos uspešno posodobljen", "Vnos uspešno oddan"), type = "message")
+                        showNotification("Vnos uspešno oddan", type = "message")
                         entry_update(entry_update() + 1)  # Trigger update of View/Edit tab
                         
                         # Clear the form
@@ -847,7 +924,6 @@ server <- function(input, output, session) {
                         # Reset the calculated work time
                         session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
                 } else {
-                        dbExecute(conn, "ROLLBACK")
                         showModal(modalDialog(
                                 title = "Napaka pri zapisu",
                                 "Vnos ni uspel. Ali so podatki nepopolni ali pa nepravilni.",
@@ -866,8 +942,6 @@ server <- function(input, output, session) {
         get_user_dates <- reactive({
                 entry_update()  # This ensures the reactive recalculates when entry_update changes
                 req(credentials())
-                conn <- get_db_connection()
-                on.exit(dbDisconnect(conn))
                 
                 date_range <- get_allowed_date_range()
                 
@@ -878,10 +952,15 @@ server <- function(input, output, session) {
                 AND date BETWEEN $2 AND $3
                 AND EXTRACT(DOW FROM date) BETWEEN 1 AND 5
                 ORDER BY date DESC"
-                result <- dbGetQuery(conn, query, list(credentials()$user_id, date_range$start_date, date_range$end_date))
+                result <- safe_db_query(query, list(credentials()$user_id, date_range$start_date, date_range$end_date))
+                
+                if (is.null(result)) {
+                        return(character(0))
+                }
                 
                 as.character(result$date)
         })
+        
         
         # Update date choices when viewing submissions
         observe({
@@ -901,8 +980,6 @@ server <- function(input, output, session) {
         # Get entry details for a specific date
         get_entry_details <- function(date, update_form = FALSE) {
                 req(credentials())
-                conn <- get_db_connection()
-                on.exit(dbDisconnect(conn))
                 
                 if (is.null(date) || is.na(date)) {
                         if (update_form) {
@@ -913,10 +990,9 @@ server <- function(input, output, session) {
                 
                 query <- "SELECT * FROM time_entries 
               WHERE user_id = $1 AND date = $2 AND is_current = TRUE"
-                result <- dbGetQuery(conn, query, list(credentials()$user_id, date))
+                result <- safe_db_query(query, list(credentials()$user_id, date))
                 
-                if (nrow(result) > 0) {
-        
+                if (!is.null(result) && nrow(result) > 0) {
                         if (update_form) {
                                 updateDateInput(session, "date", value = result$date)
                                 updateTimeInput(session, "startTime", value = result$start_time)
@@ -931,13 +1007,12 @@ server <- function(input, output, session) {
                                 session$sendCustomMessage(type = 'triggerWorkTimeCalc', message = list())
                         }
                         
-                        result[1,]
+                        return(result[1,])
                 } else {
                         if (update_form) {
-                                # Clear the form if no entry is found
-                                clearForm(session)                        }
-                        
-                        NULL
+                                clearForm(session)
+                        }
+                        return(NULL)
                 }
         }
         
@@ -984,23 +1059,24 @@ server <- function(input, output, session) {
                         return()
                 }
                 
-                conn <- get_db_connection()
-                on.exit(dbDisconnect(conn))
-                
                 # First, verify current password
                 verify_query <- "SELECT id FROM employees WHERE id = $1 AND password = $2"
-                verify_result <- dbGetQuery(conn, verify_query, list(credentials()$user_id, input$current_password))
+                verify_result <- safe_db_query(verify_query, list(credentials()$user_id, input$current_password))
                 
-                if (nrow(verify_result) == 0) {
+                if (is.null(verify_result) || nrow(verify_result) == 0) {
                         showNotification("Current password is incorrect", type = "error")
                         return()
                 }
                 
                 # If verified, update password
                 update_query <- "UPDATE employees SET password = $1 WHERE id = $2"
-                dbExecute(conn, update_query, list(input$new_password, credentials()$user_id))
+                result <- safe_db_query(update_query, list(input$new_password, credentials()$user_id), fetch = FALSE)
                 
-                showNotification("Password updated successfully", type = "message")
+                if (!is.null(result)) {
+                        showNotification("Password updated successfully", type = "message")
+                } else {
+                        showNotification("Error updating password. Please try again.", type = "error")
+                }
         })
 }
 
