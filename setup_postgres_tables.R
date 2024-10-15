@@ -76,3 +76,12 @@ create_emp_table_sql <- 'CREATE TABLE employees (
 dbExecute(con, create_emp_table_sql)
 
 
+create_sector_tbl_sql <- 'CREATE TABLE sectors (
+        id integer PRIMARY KEY,
+        sector_name VARCHAR(100) UNIQUE NOT NULL,
+        employee_ids INTEGER[]
+);'
+
+# Execute the table creation command
+dbExecute(con, create_sector_tbl_sql)
+
