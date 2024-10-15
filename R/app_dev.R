@@ -169,7 +169,7 @@ ui <- fluidPage(
         tags$footer(
                 tags$hr(),
                 tags$p(
-                        "Špička\U2122 - 2024 - App Version: 0.6.0", 
+                        "Špička\U2122 - 2024 - App Version: 1.0.0", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
                 )
         )
@@ -469,7 +469,7 @@ server <- function(input, output, session) {
                 
                 # Determine color based on contract hours
                 color <- if (abs(total_time - contract_hours) < 0.01) "#64af80" 
-                else if (total_time < contract_hours) "yellow" 
+                else if (total_time < contract_hours) "#f5d16c" 
                 else "#add8e6"
                 
                 list(time = sprintf("%02d:%02d", total_hours, total_minutes), color = color)
