@@ -2,6 +2,7 @@
 title: "Delo od doma - Poročilo zaposlenega"
 output:
   pdf_document:
+    latex_engine: xelatex
     toc: false
     includes:
       in_header: footer.tex

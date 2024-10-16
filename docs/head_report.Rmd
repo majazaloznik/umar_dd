@@ -1,13 +1,14 @@
 ---
 output:
   pdf_document:
+    latex_engine: xelatex
     toc: false
     includes:
       in_header: footer.tex
 params:
   start_date: !r Sys.Date() - 21
   end_date: !r Sys.Date()
-  sector: 6    
+  sector: 7    
 ---
 
 ```{r setup, include=FALSE}

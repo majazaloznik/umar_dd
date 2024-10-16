@@ -3,6 +3,7 @@ title: "Delo od doma - Admin poročilo"
 subtitle: "`r format(as.Date(params$start_date), '%d.%m.%Y')`  - `r format(as.Date(params$end_date), '%d.%m.%Y')`"
 output:
   pdf_document:
+    latex_engine: xelatex
     toc: false
     includes:
       in_header: footer.tex
@@ -68,7 +69,8 @@ data <- raw_data  |>
         filter(!is.na(Ime)) |> 
         mutate(sort_key = stringi::stri_trans_general(Ime, "Latin-ASCII")) |> 
         arrange(sort_key, Datum) |> 
-        select(-sort_key)
+        select(-sort_key) |> 
+        mutate(Odmor = ifelse(lunch == FALSE, 0, Odmor))
 
 
 dbDisconnect(conn)
@@ -89,6 +91,7 @@ start_time_background <- ifelse(!is.na(data$Prihod) & !is.na(data$arrivalStart) 
 
 end_time_background <- ifelse(!is.na(data$Odhod) & !is.na(data$departureStart) & !is.na(data$departureEnd) & (data$Odhod < data$departureStart | data$Odhod > data$departureEnd),
                               "#D46565", "black")
+
 
 lunch_background <- ifelse(!is.na(data$Odmor) & !is.na(data$odmor_check) & (data$Odmor < data$odmor_check), "#D46565", "black")
 

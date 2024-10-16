@@ -85,6 +85,21 @@ ui <- fluidPage(
         useShinyjs(),
         tags$head(
                 tags$style(HTML("
+                        @font-face {
+            font-family: 'Aptos';
+            src: url('fonts/Aptos.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: 'Aptos';
+            src: url('fonts/Aptos-Bold.ttf') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+        }
+        body, input, select, textarea, button {
+            font-family: 'Aptos', sans-serif;
+        }
             .shiny-input-container {margin-bottom: 10px;}
             #submit, #clear {margin-top: 10px;}
             #calculatedWorkTime {margin-bottom: 20px;}
@@ -95,26 +110,33 @@ ui <- fluidPage(
                 border-bottom: 1px solid #dee2e6;
             }
             #header-container {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            width: 100%;
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                position: relative;
+                height: 30px; /* Adjust this value based on your logo height */
         }
             #logo-name-container {
-            display: flex;
-            align-items: center;
-            flex-grow: 1;
+        display: flex;
+        align-items: flex-end;
+        height: 100%;
         }
             #app-logo {
             width: 75px;  
             height: auto;
-            margin-right: 10px;
+             align-self: flex-start;
         }
             #user-fullname {
             font-weight: bold;
-            text-align: center;
-            flex-grow: 1;
-        }
+                position: absolute;
+        left: 50%;
+        bottom: 0;
+        transform: translateX(-50%);
+        margin: 0;
+            }
+            #logout {
+        align-self: flex-start;
+    }
             #startTime, #endTime {
             width: 80%;
             max-width: 150px; 
@@ -170,7 +192,7 @@ ui <- fluidPage(
         tags$footer(
                 tags$hr(),
                 tags$p(
-                        "Špička\U2122 - 2024 - App Version: 1.0.2", 
+                        "Špička\U2122 - 2024 - App Version: 1.1.0", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
                 )
         )
@@ -262,23 +284,25 @@ server <- function(input, output, session) {
                                  fluidRow(
                                          column(10,
                                                 fluidRow(
-                                                        column(5,  # First column (narrower)
-                                                               # shinyWidgets::airDatepickerInput("date", "Datum", value = NULL, firstDay = 1, 
-                                                               #                                  dateFormat = "dd.MM.yyyy", disabledDaysOfWeek = c(0, 6), 
-                                                               #                                  language = "en", readonly = TRUE),
+                                                        column(5,  
+                                                               div(style = "margin-top: 20px;",
                                                                dateInput("date", "Datum", value = NULL, weekstart = 1, format = "dd.mm.yyyy", daysofweekdisabled = c(0, 6), language = "sl"),
                                                                timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
                                                                timeInput("endTime", "Odhod z dela", value = "", seconds = FALSE),                                                               timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
                                                                timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
                                                                hr(),
                                                                uiOutput("entryHistory")
-                                                        ),
+                                                        )),
                                                         column(7,  # Second column (wider)
+                                                               div(style = "margin-top: 20px;",
                                                                textAreaInput("tasks", "Poročilo o opravljenem delu", value = "", rows = 10),
                                                                textAreaInput("notes", "Dodatne opombe za špico", value = "", rows = 5),
-                                                               checkboxInput("lunch", "Odmor med delovnim časom ('malica')", value = TRUE),
+                                                               div(
+                                                                       style = "accent-color: #64af80;",
+                                                                       checkboxInput("lunch", "Odmor med delovnim časom ('malica')", value = TRUE)
+                                                               ),
                                                                numericInput("lunchDuration", "Obseg izrabe odmora", value = NULL, min = 0, max = 99, step = 1, width = "100px")
-                                                        )
+                                                        ))
                                                 )
                                          ),
                                          column(2,  # Third column (narrowest)
@@ -289,16 +313,30 @@ server <- function(input, output, session) {
                                                 actionButton("submit", "Oddaj/posodobi", width = "100%"),
                                                 br(),
                                                 br(),
-                                                actionButton("clear", "Počisti", width = "100%")
+                                                actionButton("clear", "Počisti polja", width = "100%"),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                actionButton("delete", "Izbriši vnos", width = "100%", 
+                                                             style="color: #ff7d9d; border-color: #ced4da")
                                          )
                                  )
                         ),
                         tabPanel("Spremeni geslo",
+                                 div(style = "margin-top: 20px;",
                                  passwordInput("current_password", "Obstoječe geslo"),
                                  passwordInput("new_password", "Novo geslo"),
                                  passwordInput("confirm_password", "Potrdi novo geslo"),
                                  actionButton("change_password", "Spremeni geslo")
-                        ),
+                        )),
                                 tabPanel("Poročila",
                                          h3("Generiraj poročilo"),
                                          dateRangeInput("report_date_range", "Izberi časovno obdobje:",
@@ -396,7 +434,7 @@ server <- function(input, output, session) {
             endInput.style.backgroundColor = '%s';
         }
     ", if (is.null(start_in_range)) "white" else if (start_in_range) "white" else "#ff7d9d",
-                                       if (is.null(end_in_range)) "white" else if (end_in_range) "white" else "#eb9776"))
+                                       if (is.null(end_in_range)) "white" else if (end_in_range) "white" else "#ff7d9d"))
                 
                 list(
                         start = start_in_range,
@@ -732,6 +770,43 @@ server <- function(input, output, session) {
                 clearForm(session)
         })
 
+        observeEvent(input$delete, {
+                req(credentials(), input$date)
+                
+                # Check if an entry exists for the selected date
+                entry <- get_entry_details(input$date)
+                
+                if (is.null(entry)) {
+                        showNotification("Ni vnosa za izbrani datum.", type = "warning")
+                } else {
+                        showModal(modalDialog(
+                                title = "Potrdi izbris",
+                                "Ali si prepričan, da hočeš izbrisati ta vnos?",
+                                footer = tagList(
+                                        modalButton("Prekliči"),
+                                        actionButton("confirmDelete", "Izbriši", class = "btn-danger")
+                                )
+                        ))
+                }
+        })
+        
+        observeEvent(input$confirmDelete, {
+                req(credentials(), input$date)
+                
+                # Update the is_current flag to FALSE
+                update_query <- "UPDATE time_entries SET is_current = FALSE 
+                   WHERE user_id = $1 AND date = $2 AND is_current = TRUE"
+                result <- safe_db_query(update_query, list(credentials()$user_id, as.Date(input$date)), fetch = FALSE)
+                
+                if (!is.null(result)) {
+                        showNotification("Vnos uspešno izbrisan", type = "message")
+                        removeModal()
+                        clearForm(session)
+                        entry_update(entry_update() + 1)  # Trigger update of View/Edit tab
+                } else {
+                        showNotification("Napaka pri brisanju vnosa. Poskusite znova.", type = "error")
+                }
+        })
         render_admin_report <- function(start_date, end_date) {
                 output_file <- paste0("DD admin - ", format(Sys.time(), "%Y-%m-%d %H-%M"), ".pdf")
                 www_dir <- file.path(getwd(), "www")
