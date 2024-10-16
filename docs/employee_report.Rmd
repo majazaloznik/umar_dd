@@ -68,35 +68,34 @@ suppressPackageStartupMessages(library(kableExtra))
 suppressPackageStartupMessages(library(hms))
 suppressPackageStartupMessages(library(forcats))
 
-
-# Remove unwanted columns
+# clean up
 final <- data |> 
         mutate_all(linebreak) |>  
         mutate(Datum = format(as.Date(Datum), "%d.%m.%y"),
                across(c(Prihod, Odhod, `Zas. izhod`, `Zas. prihod`, Prisotnost), ~format(as.POSIXct(., format="%H:%M:%S"), "%H:%M"))) |> 
         tidyr::replace_na(list(Prihod = "", Odhod = "", `Zas. izhod` = "", `Zas. prihod` = "", Prisotnost = "", `Odmor` = "", notes = ""))
 
-
-# Process the data and generate the admin report table
-employee_report_table <- kable(final, format = "latex", escape = FALSE, booktabs = TRUE, 
-                               longtable = TRUE) |>
-        kable_styling(latex_options = c("hold_position", "repeat_header", "striped"),
-                      repeat_header_text = "\\emph{(Nadaljevanje tabele)}",
-                      repeat_header_method = "replace") |> 
-        row_spec(0, bold = TRUE)
-
-employee_report_table <- employee_report_table |>
-        column_spec(1, width = "1.3cm") |>  # Datum
-        column_spec(2, width = "1.2cm") |>  # Prihod
-        column_spec(3, width = "1.2cm") |>  # Odhod
-        column_spec(4, width = "1.2cm") |>  # Zas. izhod
-        column_spec(5, width = "1.2cm") |>  # Zas. prihod
-        column_spec(6, width = "1.4cm") |>  # Prisotnost
-        column_spec(7, width = "7.5 cm") |>  # Odmor
-        column_spec(8, width = "4.5 cm")  # notes
-
-
-
-employee_report_table
+# generate the admin report table
+if(nrow(final) > 0) {
+        employee_report_table <- kable(final, format = "latex", escape = FALSE, booktabs = TRUE, 
+                                       longtable = TRUE) |>
+                kable_styling(latex_options = c("hold_position", "repeat_header", "striped"),
+                              repeat_header_text = "\\emph{(Nadaljevanje tabele)}",
+                              repeat_header_method = "replace") |> 
+                row_spec(0, bold = TRUE) |>
+                column_spec(1, width = "1.3cm") |>  # Datum
+                column_spec(2, width = "1.2cm") |>  # Prihod
+                column_spec(3, width = "1.2cm") |>  # Odhod
+                column_spec(4, width = "1.2cm") |>  # Zas. izhod
+                column_spec(5, width = "1.2cm") |>  # Zas. prihod
+                column_spec(6, width = "1.4cm") |>  # Prisotnost
+                column_spec(7, width = "7.5 cm") |>  # Odmor
+                column_spec(8, width = "4.5 cm")  # notes
+        
+        employee_report_table } else  {
+                no_data <- TRUE
+        }
 
 ```
+
+`r if(exists('no_data') && no_data) "Za izbrano obdobje ni vnosov."`

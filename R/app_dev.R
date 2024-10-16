@@ -46,7 +46,7 @@ safe_db_query <- function(query, params = NULL, fetch = TRUE) {
 }
 # Authentication function
 authenticate <- function(user, password) {
-        query <- "SELECT id, username, fullname, contract_type, access, arrival_start, arrival_end, departure_start, departure_end 
+        query <- "SELECT id, username, fullname, contract_type, access, arrival_start, arrival_end, departure_start, departure_end, sector 
               FROM employees WHERE username = $1 AND password = $2"
         result <- safe_db_query(query, list(user, password))
         
@@ -71,7 +71,8 @@ authenticate <- function(user, password) {
                         arrival_start = parse_time_safely(result$arrival_start),
                         arrival_end = parse_time_safely(result$arrival_end),
                         departure_start = parse_time_safely(result$departure_start),
-                        departure_end = parse_time_safely(result$departure_end)
+                        departure_end = parse_time_safely(result$departure_end),
+                        sector = result$sector
                 )
                 
                 return(credentials)
@@ -169,7 +170,7 @@ ui <- fluidPage(
         tags$footer(
                 tags$hr(),
                 tags$p(
-                        "Špička\U2122 - 2024 - App Version: 1.0.0", 
+                        "Špička\U2122 - 2024 - App Version: 1.0.2", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
                 )
         )
@@ -732,7 +733,7 @@ server <- function(input, output, session) {
         })
 
         render_admin_report <- function(start_date, end_date) {
-                output_file <- paste0("admin_report_", format(Sys.Date(), "%Y%m%d"), ".pdf")
+                output_file <- paste0("DD admin - ", format(Sys.time(), "%Y-%m-%d %H-%M"), ".pdf")
                 www_dir <- file.path(getwd(), "www")
                 if (!dir.exists(www_dir)) dir.create(www_dir)
                 output_path <- file.path(www_dir, output_file)
@@ -755,8 +756,34 @@ server <- function(input, output, session) {
                 })
         }
         
-        render_employee_report <- function(start_date, end_date, user_id) {
-                output_file <- paste0("employee_report_", user_id, "_",format(Sys.Date(), "%Y%m%d"), ".pdf")
+        render_head_report <- function(start_date, end_date, sector, user) {
+                output_file <- paste0("DD sektorsko - ",user, " ", format(Sys.time(), "%Y-%m-%d %H-%M"), ".pdf")
+                www_dir <- file.path(getwd(), "www")
+                if (!dir.exists(www_dir)) dir.create(www_dir)
+                output_path <- file.path(www_dir, output_file)
+                
+                tryCatch({
+                        result <- rmarkdown::render(
+                                input = "../docs/head_report.Rmd",
+                                output_file = output_path,
+                                params = list(
+                                        start_date = start_date,
+                                        end_date = end_date,
+                                        sector = sector
+                                ),
+                                envir = new.env()
+                        )
+                        print(paste("Render result:", result))  # Debug print
+                        return(output_file)  # Return just the filename
+                }, error = function(e) {
+                        print(paste("Error rendering report:", e$message))
+                        return(NULL)
+                })
+        }
+        
+        
+        render_employee_report <- function(start_date, end_date, user_id, username) {
+                output_file <- paste0("DD - ", username, " ",format(Sys.time(), "%Y-%m-%d %H-%M"), ".pdf")
                 www_dir <- file.path(getwd(), "www")
                 if (!dir.exists(www_dir)) dir.create(www_dir)
                 output_path <- file.path(www_dir, output_file)
@@ -830,12 +857,13 @@ server <- function(input, output, session) {
                         start_date <- input$report_date_range[1]
                         end_date <- input$report_date_range[2]
                         user_id <- credentials()$user_id
+                        username <- credentials()$user
                         
                         # Increment the progress bar
                         incProgress(0.4, detail = "Renderiranje pdf-ja")
                         
                         # Generate the report
-                        report_filename <- render_employee_report(start_date, end_date, user_id)
+                        report_filename <- render_employee_report(start_date, end_date, user_id, username)
                         
                         # Increment the progress bar
                         incProgress(0.5, detail = "Še zadnje malenkosti")
@@ -850,13 +878,35 @@ server <- function(input, output, session) {
                 })
         })
         observeEvent(input$generate_head_report, {
-                req(credentials()$permissions == "vodja")
-                # Placeholder for head report generation
-                showNotification("Generiranje poročila vodje...", type = "message")
-                # Here you would add the logic to generate the head's report
-                # For now, we'll just show a message
-                Sys.sleep(2)  # Simulate report generation time
-                showNotification("Poročilo vodje generirano!", type = "message")
+                req(credentials())
+                # Show a progress notification
+                withProgress(message = 'Generiranje poročila...', value = 0, {
+                        
+                        # Increment the progress bar
+                        incProgress(0.1, detail = "Pripravljanje podatkov")
+                        
+                        # Get the date range
+                        start_date <- input$report_date_range[1]
+                        end_date <- input$report_date_range[2]
+                        sector <- credentials()$sector
+                        user <- credentials()$user
+                        # Increment the progress bar
+                        incProgress(0.4, detail = "Renderiranje pdf-ja")
+                        
+                        # Generate the report
+                        report_filename <- render_head_report(start_date, end_date, sector, user)
+                        
+                        # Increment the progress bar
+                        incProgress(0.5, detail = "Še zadnje malenkosti")
+                        
+                        if (!is.null(report_filename)) {
+                                # Open the PDF in a new tab
+                                session$sendCustomMessage("openPDF", report_filename)
+                                showNotification("Poročilo je bilo uspešno generirano.", type = "message")
+                        } else {
+                                showNotification("Hm, nekje se je zataknilo. Mogoče poskusi še enkrat, sicer pa pokliči Majo Z...", type = "error")
+                        }
+                })
         })
         
         # Define a function to insert or update an entry

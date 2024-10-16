@@ -10,6 +10,7 @@
 
 % Define the custom color
 \definecolor{customred}{HTML}{A10305}
+\arrayrulecolor{customred}
 
 \pagestyle{fancy}
 \fancyhf{}
@@ -18,7 +19,7 @@
 \renewcommand{\footrule}{\hbox to\headwidth{\color{customred}\leaders\hrule height \footrulewidth\hfill}}
 
 \fancyfoot[R]{Stran \thepage\ od \pageref{LastPage}}
-\fancyfoot[L]{Poročilo pripravljeno \DTMnow}
+\fancyfoot[L]{Poročilo pripravljeno v Špički™ \DTMnow}
 
 \makeatletter
 \AtBeginDocument{%
@@ -28,7 +29,7 @@
     \renewcommand{\footrulewidth}{0.4pt}%
     \renewcommand{\footrule}{\hbox to\headwidth{\color{customred}\leaders\hrule height \footrulewidth\hfill}}
     \fancyfoot[R]{Stran \thepage\ od \pageref{LastPage}}%
-    \fancyfoot[L]{Poročilo pripravljeno \DTMnow}%
+    \fancyfoot[L]{Poročilo pripravljeno v Špički™ \DTMnow}%
   }
 }
 \makeatother

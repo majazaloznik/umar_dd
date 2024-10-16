@@ -58,7 +58,7 @@ data <- raw_data  |>
                 departureEnd = departure_end,
                 `Odmor` = lunch_mins,
                 Opombe = notes) |> 
-       filter(is_current == TRUE) |> 
+        filter(is_current == TRUE) |> 
         select(-id, -tasks, -is_current, -entry_timestamp) |> 
         relocate(Ime) |> 
         relocate(Opombe, .after = `Odmor`) |> 
@@ -98,43 +98,39 @@ lunch_background <- ifelse(!is.na(data$Odmor) & !is.na(data$odmor_check) & (data
 final <- data |> 
         select(-contractType, -arrivalStart, -arrivalEnd, 
                -departureStart, -departureEnd, -lunch, -odmor_check) |> 
-          mutate_all(linebreak) |>  
+        mutate_all(linebreak) |>  
         mutate(Datum = format(as.Date(Datum), "%d.%m.%y"),
                across(c(Prihod, Odhod, `Zas. izhod`, `Zas. prihod`, Prisotnost), ~format(as.POSIXct(., format="%H:%M:%S"), "%H:%M")),
                `Odmor` = as.character(`Odmor`)) |> 
         tidyr::replace_na(list(Prihod = "", Odhod = "", `Zas. izhod` = "", `Zas. prihod` = "", Prisotnost = "", `Odmor` = "", notes = ""))
 
-        
+
 # Process the data and generate the admin report table
-admin_report_table <- kable(final[,-1], format = "latex", escape = FALSE, booktabs = TRUE, longtable = TRUE) |>
-  kable_styling(latex_options = c("hold_position", "repeat_header", "striped"),
-                    repeat_header_text = "\\emph{(Nadaljevanje tabele)}",
-    repeat_header_method = "replace") |> 
-        pack_rows(index = table(fct_inorder(final$Ime))) |> 
-         row_spec(0, bold = TRUE)
-
-
-  
-
-# Apply conditional formatting to the table
-admin_report_table <- admin_report_table |>
-  column_spec(6, color = calculated_hours_background) |>
-  column_spec(2, color = start_time_background) |>
-  column_spec(3, color = end_time_background) |> 
-        column_spec(7, color = lunch_background) 
-
-admin_report_table <- admin_report_table |>
-  column_spec(1, width = "2.5cm") |>  # Datum
-  column_spec(2, width = "1.7cm") |>  # Prihod
-  column_spec(3, width = "2cm") |>  # Odhod
-  column_spec(4, width = "1.7cm") |>  # Zas. izhod
-  column_spec(5, width = "2cm") |>  # Zas. prihod
-  column_spec(6, width = "1.5cm") |>  # Prisotnost
-  column_spec(7, width = "1.3cm") |>  # Odmor
-  column_spec(8, width = "6.5cm")  # notes
-
-
-
-admin_report_table
+if(nrow(final) > 0) {
+        admin_report_table <- kable(final[,-1], format = "latex", escape = FALSE, booktabs = TRUE, longtable = TRUE) |>
+                kable_styling(latex_options = c("hold_position", "repeat_header", "striped"),
+                              repeat_header_text = "\\emph{(Nadaljevanje tabele)}",
+                              repeat_header_method = "replace") |> 
+                pack_rows(index = table(fct_inorder(final$Ime))) |> 
+                row_spec(0, bold = TRUE)|>
+                # Apply conditional formatting to the table
+                column_spec(6, color = calculated_hours_background) |>
+                column_spec(2, color = start_time_background) |>
+                column_spec(3, color = end_time_background) |> 
+                column_spec(7, color = lunch_background) |>
+                column_spec(1, width = "2.5cm") |>  # Datum
+                column_spec(2, width = "1.7cm") |>  # Prihod
+                column_spec(3, width = "2cm") |>  # Odhod
+                column_spec(4, width = "1.7cm") |>  # Zas. izhod
+                column_spec(5, width = "2cm") |>  # Zas. prihod
+                column_spec(6, width = "1.5cm") |>  # Prisotnost
+                column_spec(7, width = "1.3cm") |>  # Odmor
+                column_spec(8, width = "6.5cm")  # notes
+        
+        admin_report_table   } else  {
+                no_data <- TRUE
+        }
 
 ```
+
+`r if(exists('no_data') && no_data) "Za izbrano obdobje ni vnosov."`
