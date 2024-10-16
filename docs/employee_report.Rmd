@@ -1,0 +1,102 @@
+---
+title: "Delo od doma - Poročilo zaposlenega"
+output:
+  pdf_document:
+    toc: false
+    includes:
+      in_header: footer.tex
+classoption: landscape
+params:
+  start_date: !r Sys.Date() - 21
+  end_date: !r Sys.Date()
+  user_id: 1
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r getdata}
+suppressPackageStartupMessages(library(DBI))
+suppressPackageStartupMessages(library(RPostgres))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(stringi))
+
+conn <- dbConnect(RPostgres::Postgres(),
+                  dbname = "umar_dd",
+                  host = "localhost",
+                  port = 5432,
+                  user = "postgres",
+                  password = Sys.getenv("PG_PG_PSW"))
+
+query <- "SELECT * FROM time_entries WHERE date BETWEEN $1 AND $2 and user_id= $3"
+raw_data <- dbGetQuery(conn, query, params = list(params$start_date, 
+                                                  params$end_date,
+                                                  params$user_id))
+
+query_employees <- "SELECT fullname FROM employees WHERE id = $1"
+employee_name <- dbGetQuery(conn, query_employees, params = list(params$user_id))
+
+
+data <- raw_data  |> 
+        rename( Datum = date,
+                Prihod = start_time,
+                Odhod = end_time,
+                `Zas. izhod` = break_start,
+                `Zas. prihod` = break_end,
+                `Prisotnost` = calculated_time,
+                `Opravljene naloge` = tasks,
+                Opombe = notes) |> 
+        filter(is_current == TRUE) |> 
+        select(-user_id, -id, -is_current, -entry_timestamp, -lunch, -lunch_mins) |> 
+        relocate(Opombe, .after = `Opravljene naloge`) |> 
+        relocate(Prisotnost, .after = `Zas. prihod`) |> 
+        arrange(Datum) 
+
+
+dbDisconnect(conn)
+```
+
+---
+subtitle: "`r employee_name` - `r format(as.Date(params$start_date), '%d.%m.%Y')` - `r format(as.Date(params$end_date), '%d.%m.%Y')`"
+---
+
+```{r, results='asis'}
+suppressPackageStartupMessages(library(knitr))
+suppressPackageStartupMessages(library(kableExtra))
+suppressPackageStartupMessages(library(hms))
+suppressPackageStartupMessages(library(forcats))
+
+
+# Remove unwanted columns
+final <- data |> 
+        mutate_all(linebreak) |>  
+        mutate(Datum = format(as.Date(Datum), "%d.%m.%y"),
+               across(c(Prihod, Odhod, `Zas. izhod`, `Zas. prihod`, Prisotnost), ~format(as.POSIXct(., format="%H:%M:%S"), "%H:%M"))) |> 
+        tidyr::replace_na(list(Prihod = "", Odhod = "", `Zas. izhod` = "", `Zas. prihod` = "", Prisotnost = "", `Odmor` = "", notes = ""))
+
+
+# Process the data and generate the admin report table
+employee_report_table <- kable(final, format = "latex", escape = FALSE, booktabs = TRUE, 
+                               longtable = TRUE) |>
+        kable_styling(latex_options = c("hold_position", "repeat_header", "striped"),
+                      repeat_header_text = "\\emph{(Nadaljevanje tabele)}",
+                      repeat_header_method = "replace") |> 
+        row_spec(0, bold = TRUE)
+
+employee_report_table <- employee_report_table |>
+        column_spec(1, width = "1.3cm") |>  # Datum
+        column_spec(2, width = "1.2cm") |>  # Prihod
+        column_spec(3, width = "1.2cm") |>  # Odhod
+        column_spec(4, width = "1.2cm") |>  # Zas. izhod
+        column_spec(5, width = "1.2cm") |>  # Zas. prihod
+        column_spec(6, width = "1.4cm") |>  # Prisotnost
+        column_spec(7, width = "7.5 cm") |>  # Odmor
+        column_spec(8, width = "4.5 cm")  # notes
+
+
+
+employee_report_table
+
+```

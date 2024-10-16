@@ -1,0 +1,114 @@
+---
+output:
+  pdf_document:
+    toc: false
+    includes:
+      in_header: footer.tex
+params:
+  start_date: !r Sys.Date() - 21
+  end_date: !r Sys.Date()
+  sector: 6    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+get_sector_name <- function(sector_id) {
+        conn <- DBI::dbConnect(RPostgres::Postgres(),
+                               dbname = "umar_dd",
+                               host = "localhost",
+                               port = 5432,
+                               user = "postgres",
+                               password = Sys.getenv("PG_PG_PSW"))
+        
+        sector_query <- "SELECT sector_name FROM sectors WHERE id = $1"
+        sector_name <- DBI::dbGetQuery(conn, sector_query, params = list(sector_id))$sector_name
+        
+        DBI::dbDisconnect(conn)
+        
+        return(sector_name)
+}
+```
+
+---
+subtitle: "`r get_sector_name(params$sector)` - `r format(as.Date(params$start_date), '%d.%m.%Y')`  - `r format(as.Date(params$end_date), '%d.%m.%Y')`"
+title: Delo od doma - Poročilo vodje 
+
+---
+
+```{r getdata}
+
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(stringi))
+suppressPackageStartupMessages(library(knitr))
+suppressPackageStartupMessages(library(kableExtra))
+suppressPackageStartupMessages(library(forcats))
+conn <- DBI::dbConnect(RPostgres::Postgres(),
+                  dbname = "umar_dd",
+                  host = "localhost",
+                  port = 5432,
+                  user = "postgres",
+                  password = Sys.getenv("PG_PG_PSW"))
+
+query <- "WITH sector_employees AS (
+    SELECT unnest(employee_ids) AS employee_id
+    FROM sectors
+    WHERE id = $3)
+SELECT te.*
+FROM time_entries te
+JOIN sector_employees se ON te.user_id = se.employee_id
+WHERE te.date BETWEEN $1 AND $2;"
+raw_data <- DBI::dbGetQuery(conn, query, params = list(params$start_date, 
+                                                  params$end_date,
+                                                  params$sector))
+
+employee_ids <- raw_data |> pull(user_id)
+employee_ids_array <- paste0("{", paste(employee_ids, collapse = ","), "}")
+
+# get employee names
+query <- "
+SELECT id, fullname
+FROM employees
+WHERE id = ANY($1::int[]);
+"
+employee_names <- DBI::dbGetQuery(conn, query, params = list(employee_ids_array))
+
+data <- raw_data  |> 
+        filter(is_current == TRUE) |> 
+        select(user_id, date, tasks) |> 
+        left_join(employee_names, by = c("user_id"="id")) |> 
+        select(-user_id) |> 
+        mutate(sort_key = stringi::stri_trans_general(fullname, "Latin-ASCII")) |> 
+        arrange(sort_key, date) |> 
+        select(-sort_key) |> 
+        relocate(fullname) |> 
+        rename(`Ime` = fullname,
+               Datum = date,
+               `Opravljene naloge` = tasks) |> 
+        mutate_all(linebreak) |>  
+        mutate(Datum = format(as.Date(Datum), "%d.%m.%y"))
+        
+DBI::dbDisconnect(conn)
+```
+
+
+
+```{r, results='asis'}
+if(nrow(data) > 0) {
+        head_report_table <- kable(data[,-1], format = "latex", escape = FALSE, booktabs = TRUE, longtable = TRUE) |>
+             kable_styling(latex_options = c("hold_position", "repeat_header", "striped"),
+                    repeat_header_text = "\\emph{(Nadaljevanje tabele)}",
+    repeat_header_method = "replace") |> 
+        pack_rows(index = table(fct_inorder(data$Ime))) |> 
+         row_spec(0, bold = TRUE)
+        
+        head_report_table <- head_report_table |>
+                column_spec(1, width = "3.5cm") |>  # Datum
+                column_spec(2, width = "12cm")  # opravljeno
+        
+        head_report_table
+} else  {no_data <- TRUE
+}
+```
+
+`r if(exists('no_data') && no_data) "Za izbrano obdobje ni vnosov."`
+

@@ -1,9 +1,8 @@
 ---
-title: "Špička - Admin poročilo"
+title: "Delo od doma - Admin poročilo"
 subtitle: "`r format(as.Date(params$start_date), '%d.%m.%Y')`  - `r format(as.Date(params$end_date), '%d.%m.%Y')`"
 output:
   pdf_document:
-    keep_tex:  true          
     toc: false
     includes:
       in_header: footer.tex
@@ -108,8 +107,14 @@ final <- data |>
         
 # Process the data and generate the admin report table
 admin_report_table <- kable(final[,-1], format = "latex", escape = FALSE, booktabs = TRUE, longtable = TRUE) |>
-  kable_styling(latex_options = c("hold_position", "repeat_header", "striped")) |> 
-        pack_rows(index = table(fct_inorder(final$Ime)))
+  kable_styling(latex_options = c("hold_position", "repeat_header", "striped"),
+                    repeat_header_text = "\\emph{(Nadaljevanje tabele)}",
+    repeat_header_method = "replace") |> 
+        pack_rows(index = table(fct_inorder(final$Ime))) |> 
+         row_spec(0, bold = TRUE)
+
+
+  
 
 # Apply conditional formatting to the table
 admin_report_table <- admin_report_table |>

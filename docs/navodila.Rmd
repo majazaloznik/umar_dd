@@ -4,6 +4,8 @@ subtitle: "Vnašanje poročil o delu od doma"
 output:
         pdf_document:
                  extra_dependencies: ["float"]
+header-includes:
+  - \renewcommand{\figurename}{Slika}
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
@@ -14,73 +16,78 @@ knitr::opts_chunk$set(echo = FALSE)
 
 # Prijava
 
-Uporabniško ime je sestavljeno iz prve črke imena in (prvega dela) priimka, npr. `mzaloznik`. ^[Če hočeš drugačno uporabniško ime, pridi do Maje Z. in se zmenimo.]
+Uporabniško ime je sestavljeno iz prve črke imena in (prvega dela) priimka  brez čšž-jev npr. `mzaloznik`.^[Če hočeš drugačno uporabniško ime, pridi do Maje Z. in se zmenimo.]
 
-Geslo je po defaultu 123, po prvi prijavi je priporočljivo, da si ga spremenite. 
+Geslo je privzeto nastavljeno na 123 in po prvi prijavi je priporočljivo, da si ga spremeniš. 
 
-```{r, fig.cap="Prijava", out.width="80%", fig.align="center", fig.pos="h!"}
+```{r, fig.cap="Prijava", out.width="80%", fig.align="center", fig.pos="H"}
 knitr::include_graphics("01.png")
 ```
 
 \newpage
 # Nov vnos
 
-Za nov vnos najprej na koledarju izberi datum za katerega želiš vnesti poročilo
+Za nov vnos najprej na koledarju izberi datum, za katerega želiš vnesti poročilo.
 
-```{r, fig.cap="Izbira datuma", out.width="50%", fig.align="center", fig.pos="h!"}
+```{r, fig.cap="Izbira datuma", out.width="50%", fig.align="center", fig.pos="H"}
 knitr::include_graphics("02.png")
 ```
 
 ## Obvezna polja
 
-Obvezen je vnos prihoda in odhoda na delo in poročila o opravljenih nalogah. 
+Obvezen je vnos prihoda in odhoda na delo ter poročila o opravljenih nalogah. 
 
-Po pravilnem vnosu prihoda in odhoda se avtomatično prikaže izračun skupne prisotnosti. Pri tem barva podlage označuje ali je prisotnost enaka X-urnemu delavniku na tvoji pogodbi, ali je večja ali manjša. V spodnjem primeru je večja:
+Po pravilnem vnosu prihoda in odhoda se avtomatično prikaže izračun skupne prisotnosti. Pri tem barva podlage označuje, ali je prisotnost enaka X-urnemu delavniku na tvoji pogodbi, ali je večja ali manjša. V spodnjem primeru je večja:
 
-```{r, fig.cap="Pravilen vnos prisotnosti", out.width="80%", fig.align="center", fig.pos="h!"}
+```{r, fig.cap="Pravilen vnos prisotnosti", out.width="80%", fig.align="center", fig.pos="H"}
 knitr::include_graphics("03.png")
 ```
 
-Vnesti je mogoče tudi prihod ali odhod zunaj dovoljenega časa, kar pomeni, da je šlo za predčasni prihod/odhod. V tem primeru se bo opozorilno obarvalo ozadje. Tak vnos je še vedno mogoče oddati, opozorilna barva je namenjena preprečevanju napak in pa kot opozorilo, da moraš oddati ustrezno vlogo v špici in to tudi napisati v opombe. 
+Vnesti je mogoče tudi prihod ali odhod zunaj dovoljenega časa, kar pomeni, da je šlo za predčasni prihod/odhod. V tem primeru se bo opozorilno obarvalo ozadje. Tak vnos je še vedno mogoče oddati, opozorilna barva je namenjena preprečevanju napak in pa kot opozorilo, da moraš oddati ustrezno vlogo v Špici in to tudi napisati v opombe. 
 
-```{r, fig.cap="Prihod/odhod zunaj dovoljenega časa", out.width="40%", fig.align="center", fig.pos="h!"}
+```{r, fig.cap="Prihod/odhod zunaj dovoljenega časa", out.width="40%", fig.align="center", fig.pos="H"}
 knitr::include_graphics("04.png")
 ```
 
-Poročilo o opravljenem delu vneseš v veliko polje na sredini. To je običajen vnos in zdaj že lahko klikneš na gumb `Oddaj/posodobi` na desni strani. Aplikacija te bo opozorila, če je karkoli narobe. 
+Poročilo o opravljenem delu vneseš v veliko polje na sredini. To so vsa obvezna polja za običajen vnos in zdaj že lahko klikneš na gumb `Oddaj/posodobi` na desni strani. Aplikacija te bo opozorila, če je karkoli narobe. 
 
-```{r, fig.cap="Vnos opravljenih nalog", out.width="95%", fig.align="center", fig.pos="h!"}
+```{r, fig.cap="Vnos opravljenih nalog", out.width="95%", fig.align="center", fig.pos="H"}
 knitr::include_graphics("05.png")
 ```
 
 ## Dodatna polja
 
-`Začetek` in `konec privatnega izhoda` sta polji namenjeni izhodu, ki ni odmor za malico in se torej odšteje od skupne prisotnosti. Vnešene ure morajo seveda biti znotraj prihoda in odhoda na delo. 
+`Začetek` in `konec privatnega izhoda` sta polji, namenjeni izhodu, ki ni odmor za malico in se torej odšteje od skupne prisotnosti. Vnešene ure morajo seveda biti znotraj prihoda in odhoda na delo. 
 
-`Dodatne opombe za špico` je polje napišeš, če so bile potrebne tudi kakšne dodatne vloge v špici npr. če gre za delo od doma po urah, če si oddal vlogo za predčasni odhod ali kaj podobnega.
+`Dodatne opombe za špico` je polje, kamor napišeš, če so bile potrebne tudi kakšne dodatne vloge v Špici npr. če gre za delo od doma po urah, če si oddal vlogo za predčasni odhod ali kaj podobnega.
 
-`Odmor med delovnim časom (malica)` in `Obseg izrabe odmora` sta avtomatično izpolnjeni polji. Če želiš lahko čas tega odmora tudi skrajšaš ali celo zbrišeš kljukico, ampat to ne vpliva na izračun skupne prisotnosti. 
+`Odmor med delovnim časom (malica)` in `Obseg izrabe odmora` sta avtomatično izpolnjeni polji. Če želiš, lahko čas tega odmora tudi skrajšaš ali celo zbrišeš kljukico, ampak to ne vpliva na izračun skupne prisotnosti. 
 
 
-```{r, fig.cap="Dodatna polja", out.width="95%", fig.align="center", fig.pos="h!"}
+```{r, fig.cap="Dodatna polja", out.width="95%", fig.align="center", fig.pos="H"}
 knitr::include_graphics("06.png")
 ```
 
 \newpage
 # Popravljanje obstoječega vnosa
 
-Če se pri oddaji poročila zmotiš, lako obstoječi vnos tudi popraviš. **V bazi bodo shranjeni vsi vnosi, da je zagotovljena sledljivost sprememb.**
+Če se pri oddaji poročila zmotiš, lako obstoječi vnos tudi popraviš. 
 
-Spremembo narediš tako, da v koledarju izbereš datum, ki ga želiš spremeniti. Forma se bo izpolnila z vrednostmi, ki si jih nazadnje vnesel. Spodaj se bo tudi videla zgodovina sprememb.
 
-```{r, fig.cap="Zgodovina sprememb", out.width="45%", fig.align="center", fig.pos="h!"}
+**Popravke delaj samo za tekoči teden. Če moraš izjemoma kaj popraviti kasneje, ko je že bilo pripravljeno tedensko poročilo za vnos v Špico, nemudoma sporoči na `spica.umar@gov.si`, sicer popravki ne bodo upoštevani.**
+
+**V bazi bodo shranjeni vsi vnosi, da je zagotovljena sledljivost sprememb in se vidi tudi, kdaj so bili popravki narejeni.**
+
+Spremembo narediš tako, da v koledarju izbereš datum, ki ga želiš spremeniti. Forma se bo izpolnila z vrednostmi, ki si jih nazadnje vnesel. Spodaj bo vidna tudi zgodovina sprememb.
+
+```{r, fig.cap="Zgodovina sprememb", out.width="45%", fig.align="center", fig.pos="H"}
 knitr::include_graphics("07.png")
 ```
 
 
-Vnos posodobiš podobno kot delaš nov vnos: izpolniš oz. popraviš ustrezna polja in klikneš na gumb `Oddaj/posodobi`. Tokrat te bo Špička opozorila, da popravljaš obstoječ vnos in vprašala, če si res prepričan. 
+Vnos posodobiš podobno, kot delaš nov vnos: izpolniš oz. popraviš ustrezna polja in klikneš na gumb `Oddaj/posodobi`. Tokrat te bo Špička opozorila, da popravljaš obstoječ vnos, in vprašala, ali si res prepričan. 
 
-```{r, fig.cap="Posodobitev vnosa", out.width="80%", fig.align="center", fig.pos="h!"}
+```{r, fig.cap="Posodobitev vnosa", out.width="80%", fig.align="center", fig.pos="H"}
 knitr::include_graphics("08.png")
 ```
 
@@ -90,7 +97,21 @@ knitr::include_graphics("08.png")
 Na drugem zavihku imaš polja za spremembo gesla.^[Če slučajno pozabiš novo geslo, pridi do Maje Z., pa se zmenimo..]
 
 
-```{r, fig.cap="Sprememba gesla", out.width="45%", fig.align="center", fig.pos="h!"}
+```{r, fig.cap="Sprememba gesla", out.width="40%", fig.align="center", fig.pos="H"}
 knitr::include_graphics("09.png")
 ```
 
+# Priprava poročila * - ta funkcija je še v razvoju
+
+Na tretjem zavihku imaš možnost priprave poročila za izbrano obdobje. Vsak zaposleni lahko pripravi poročilo za svoje vnose, vodje sektorjev in administratorji pa lahko pripravijo tudi posebna poročila za svoj sektor oz. za vnos v Špico.
+
+```{r, fig.cap="Priprava poročila", out.width="40%", fig.align="center", fig.pos="H"}
+knitr::include_graphics("10.png")
+```
+
+Pripravljeno pdf poročilo se odpre v brskalniku. **Ob pripravi poročila bo brskalnik verjetno blokiral pop-up, zato ga moraš izrecno dovoliti.** To je treba narediti samo enkrat, potem se bo poročilo samodejno odprlo. 
+
+
+```{r, fig.cap="Odprava blokade", out.width="40%", fig.align="center", fig.pos="H"}
+knitr::include_graphics("11.png")
+```
