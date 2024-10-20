@@ -296,7 +296,7 @@ server <- function(input, output, session) {
                                                         column(7,  # Second column (wider)
                                                                div(style = "margin-top: 20px;",
                                                                textAreaInput("tasks", "Poročilo o opravljenem delu", value = "", rows = 10),
-                                                               textAreaInput("notes", "Dodatne opombe za špico", value = "", rows = 5),
+                                                               textAreaInput("notes", "Dodatne opombe za Špico", value = "", rows = 5),
                                                                div(
                                                                        style = "accent-color: #64af80;",
                                                                        checkboxInput("lunch", "Odmor med delovnim časom ('malica')", value = TRUE)
@@ -986,6 +986,16 @@ server <- function(input, output, session) {
         
         # Define a function to insert or update an entry
         insertEntry <- function() {
+                sanitize_input <- function(text) {
+                        if (is.null(text) || is.na(text)) return(text)
+                        text %>%
+                                stringr::str_replace_all("\\\\", "\\\\textbackslash{}") %>%
+                                stringr::str_replace_all("([&%$#_{}~^])", "\\\\\\1") %>%
+                                stringr::str_replace_all("~", "\\\\textasciitilde{}") %>%
+                                stringr::str_replace_all("\\^", "\\\\textasciicircum{}") %>%
+                                stringr::str_replace_all("\n", "\\\\newline ")
+                }
+                
                 start_time <- strftime(input$startTime, "%H:%M:%S")
                 end_time <- strftime(input$endTime, "%H:%M:%S")
                 
@@ -1015,6 +1025,10 @@ server <- function(input, output, session) {
                                            floor(total_time),
                                            round((total_time - floor(total_time)) * 60))
                 
+                # Sanitize text inputs
+                sanitized_tasks <- sanitize_input(as.character(input$tasks))
+                sanitized_notes <- sanitize_input(as.character(input$notes))
+                
                 # Update existing entries
                 update_query <- "UPDATE time_entries SET is_current = FALSE WHERE user_id = $1 AND date = $2 AND is_current = TRUE"
                 safe_db_query(update_query, list(credentials()$user_id, as.Date(input$date)), fetch = FALSE)
@@ -1027,8 +1041,8 @@ server <- function(input, output, session) {
                         end_time, 
                         break_start,
                         break_end,
-                        as.character(input$tasks),
-                        as.character(input$notes),
+                        sanitized_tasks,
+                        sanitized_notes,
                         calculated_time,
                         input$lunch,
                         input$lunchDuration 
@@ -1117,7 +1131,19 @@ server <- function(input, output, session) {
               WHERE user_id = $1 AND date = $2 AND is_current = TRUE"
                 result <- safe_db_query(query, list(credentials()$user_id, date))
                 
+                desanitize_input <- function(text) {
+                        if (is.null(text) || is.na(text)) return(text)
+                        text %>%
+                                stringr::str_replace_all("\\\\textbackslash\\{\\}", "\\") %>%
+                                stringr::str_replace_all("\\\\([&%$#_{}~^])", "\\1") %>%
+                                stringr::str_replace_all("\\\\textasciitilde\\{\\}", "~") %>%
+                                stringr::str_replace_all("\\\\textasciicircum\\{\\}", "^") %>%
+                                stringr::str_replace_all("\\\\newline ", "\n")
+                }
+                
                 if (!is.null(result) && nrow(result) > 0) {
+                        result$tasks <- desanitize_input(result$tasks)
+                        result$notes <- desanitize_input(result$notes)
                         if (update_form) {
                                 updateDateInput(session, "date", value = result$date)
                                 updateTimeInput(session, "startTime", value = result$start_time)
