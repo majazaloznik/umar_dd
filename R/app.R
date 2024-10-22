@@ -1,11 +1,11 @@
 # app.R
-library(shiny)
-library(DBI)
-library(RPostgres)
-library(lubridate)
-library(shinyTime)
-library(hms)
-library(shinyjs)
+suppressPackageStartupMessages(library(shiny))
+suppressPackageStartupMessages(library(DBI))
+suppressPackageStartupMessages(library(RPostgres))
+suppressPackageStartupMessages(library(lubridate))
+suppressPackageStartupMessages(library(shinyTime))
+suppressPackageStartupMessages(library(hms))
+suppressPackageStartupMessages(library(shinyjs))
 
 Sys.setenv(TZ = "Europe/Ljubljana")
 
@@ -20,7 +20,7 @@ get_db_connection <- function() {
                                   password = Sys.getenv("PG_PG_PSW"))
                 return(conn)
         }, error = function(e) {
-                message("Failed to connect to database: ", e$message)
+                message("Povezava na bazo ni uspela: ", e$message)
                 return(NULL)
         })
 }
@@ -38,7 +38,7 @@ safe_db_query <- function(query, params = NULL, fetch = TRUE) {
                 }
                 return(result)
         }, error = function(e) {
-                message("Database query error: ", e$message)
+                message("Neuspešna poizvedba: ", e$message)
                 return(NULL)
         }, finally = {
                 dbDisconnect(conn)
@@ -114,7 +114,7 @@ ui <- fluidPage(
                 align-items: flex-start;
                 justify-content: space-between;
                 position: relative;
-                height: 30px; /* Adjust this value based on your logo height */
+                height: 30px; 
         }
             #logo-name-container {
         display: flex;
@@ -192,7 +192,7 @@ ui <- fluidPage(
         tags$footer(
                 tags$hr(),
                 tags$p(
-                        "Špička\U2122 - 2024 - App Version: 1.1.1", 
+                        "Špička\U2122 - 2024 - App Version: 1.1.2", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
                 )
         )
@@ -241,7 +241,12 @@ server <- function(input, output, session) {
                         credentials(user_credentials)
                         just_logged_in(TRUE)  
                 } else {
-                        showNotification("Napačno uporabniško ime ali geslo", type = "error")
+                        showModal(modalDialog(
+                                title = "Napaka pri prijavi",
+                                "Napačno uporabniško ime ali geslo. Poskusi še enkrat.",
+                                easyClose = TRUE,
+                                footer = modalButton("Razumem")
+                        ))
                 }
         })
         
@@ -268,7 +273,7 @@ server <- function(input, output, session) {
                 })
                 
                 # Show notification
-                showNotification("Uspešna odjava.", type = "message")
+                showNotification("Uspešna odjava.", type = "message", duration = 5)
                 
                 # Instead of reloading or closing the session, we'll update the UI
                 session$sendCustomMessage(type = "resetUI", message = list())
@@ -823,10 +828,10 @@ server <- function(input, output, session) {
                                 ),
                                 envir = new.env()
                         )
-                        print(paste("Render result:", result))  # Debug print
+                        print(paste("Rezultat renderiranja:", result))  # Debug print
                         return(output_file)  # Return just the filename
                 }, error = function(e) {
-                        print(paste("Error rendering report:", e$message))
+                        print(paste("Napaka pri renderiranju poročila:", e$message))
                         return(NULL)
                 })
         }
@@ -848,10 +853,10 @@ server <- function(input, output, session) {
                                 ),
                                 envir = new.env()
                         )
-                        print(paste("Render result:", result))  # Debug print
+                        print(paste("Rezultat renderiranja:", result))  # Debug print
                         return(output_file)  # Return just the filename
                 }, error = function(e) {
-                        print(paste("Error rendering report:", e$message))
+                        print(paste("Napaka pri renderiranju poročila:", e$message))
                         return(NULL)
                 })
         }
@@ -874,10 +879,10 @@ server <- function(input, output, session) {
                                 ),
                                 envir = new.env()
                         )
-                        print(paste("Render result:", result))  # Debug print
+                        print(paste("Rezultat renderiranja:", result))  # Debug print
                         return(output_file)  # Return just the filename
                 }, error = function(e) {
-                        print(paste("Error rendering report:", e$message))
+                        print(paste("Napaka pri renderiranju poročila:", e$message))
                         return(NULL)
                 })
         }
@@ -1197,16 +1202,21 @@ server <- function(input, output, session) {
                 
         }
         
-        observeEvent(input$selectDate, {
-                req(input$selectDate != "", input$tabs == "View Submissions")
-                get_entry_details(input$selectDate, update_form = TRUE)
-        })
+        # observeEvent(input$selectDate, {
+        #         req(input$selectDate != "", input$tabs == "View Submissions")
+        #         get_entry_details(input$selectDate, update_form = TRUE)
+        # })
         
         observeEvent(input$change_password, {
                 req(credentials())
                 
                 if (input$new_password != input$confirm_password) {
-                        showNotification("New passwords do not match", type = "error")
+                        showModal(modalDialog(
+                                title = "Napaka: napačno geslo",
+                                "Novi gesli se ne ujemata.",
+                                footer = modalButton("Razumem"),
+                                easyClose = TRUE
+                        ))
                         return()
                 }
                 
@@ -1215,7 +1225,12 @@ server <- function(input, output, session) {
                 verify_result <- safe_db_query(verify_query, list(credentials()$user_id, input$current_password))
                 
                 if (is.null(verify_result) || nrow(verify_result) == 0) {
-                        showNotification("Current password is incorrect", type = "error")
+                        showModal(modalDialog(
+                                title = "Napaka: napačno geslo",
+                                "Obstoječe geslo ni pravilno.",
+                                footer = modalButton("Razumem"),
+                                easyClose = TRUE
+                        ))
                         return()
                 }
                 
@@ -1224,10 +1239,37 @@ server <- function(input, output, session) {
                 result <- safe_db_query(update_query, list(input$new_password, credentials()$user_id), fetch = FALSE)
                 
                 if (!is.null(result)) {
-                        showNotification("Password updated successfully", type = "message")
+                        showNotification("Geslo uspešno posodobljeno", type = "message", duration = 8)
                 } else {
-                        showNotification("Error updating password. Please try again.", type = "error")
+                        showNotification("Napaka pri posodabljanju gesla. Prosim poskusi kasneje.", type = "error")
                 }
+        })
+        
+        rotate_log <- function(log_file, max_size = 10 * 1024 * 1024, keep = 5) {
+                if (file.exists(log_file) && file.size(log_file) > max_size) {
+                        # Rotate existing log files
+                        for (i in keep:1) {
+                                old <- paste0(log_file, ".", i)
+                                new <- paste0(log_file, ".", i + 1)
+                                if (file.exists(old)) file.rename(old, new)
+                        }
+                        # Rename current log file
+                        file.rename(log_file, paste0(log_file, ".1"))
+                        
+                        # Reopen the log connection
+                        sink(NULL, type = "output")
+                        sink(NULL, type = "message")
+                        close(log_con)
+                        log_con <<- file(log_file, open = "a")
+                        sink(log_con, type = "output")
+                        sink(log_con, type = "message")
+                        
+                        cat(paste("Log rotated at", Sys.time(), "\n"))
+                }
+        }
+        observe({
+                invalidateLater(36000000)  # 5 minutes in milliseconds
+                rotate_log(log_file)
         })
 }
 
