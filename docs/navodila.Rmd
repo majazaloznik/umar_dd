@@ -1,24 +1,29 @@
 ---
 title: "Špička - Navodila za uporabnike"
-subtitle: "Vnašanje poročil o delu od doma"
+subtitle: "Oddajanje poročil o delu od doma na Umarju"
 output:
         pdf_document:
-                 extra_dependencies: ["float"]
-header-includes:
-  - \renewcommand{\figurename}{Slika}
+                latex_engine: xelatex
+                extra_dependencies: ["float"]
+                includes:
+                        in_header: footer-navodila.tex
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 ```
 # Uvod
 
-Špička je dostopna preko brskalnika na povezavi [http://192.168.38.21:3838](http://192.168.38.21:3838). **Za delovanje moraš biti prijavljen v HKOM.**
+Namen aplikacije Špička je racionalizacija elektronskega oddajanja poročil o delu od doma za zaposlene na Umarju. 
+
+Špička je dostopna preko brskalnika na povezavi [http://spicka.umar.local:3838](http://spicka.umar.local:3838). 
+
+**Deluje samo, če si prijavljen v HKOM**.
 
 # Prijava
 
 Uporabniško ime je sestavljeno iz prve črke imena in (prvega dela) priimka  brez čšž-jev npr. `mzaloznik`.^[Če hočeš drugačno uporabniško ime, pridi do Maje Z. in se zmenimo.]
 
-Geslo je privzeto nastavljeno na 123 in po prvi prijavi je priporočljivo, da si ga spremeniš. 
+Geslo je privzeto nastavljeno na 123 in **po prvi prijavi je priporočljivo, da si ga spremeniš**. 
 
 ```{r, fig.cap="Prijava", out.width="80%", fig.align="center", fig.pos="H"}
 knitr::include_graphics("01.png")
@@ -61,7 +66,7 @@ knitr::include_graphics("05.png")
 
 `Dodatne opombe za špico` je polje, kamor napišeš, če so bile potrebne tudi kakšne dodatne vloge v Špici npr. če gre za delo od doma po urah, če si oddal vlogo za predčasni odhod ali kaj podobnega.
 
-`Odmor med delovnim časom (malica)` in `Obseg izrabe odmora` sta avtomatično izpolnjeni polji. Če želiš, lahko čas tega odmora tudi skrajšaš ali celo zbrišeš kljukico, ampak to ne vpliva na izračun skupne prisotnosti. 
+`Odmor med delovnim časom (malica)` in `Obseg izrabe odmora` sta avtomatično izpolnjeni polji. Če želiš, lahko čas tega odmora tudi skrajšaš ali celo zbrišeš kljukico, *ampak to ne vpliva na izračun skupne prisotnosti*. 
 
 
 ```{r, fig.cap="Dodatna polja", out.width="95%", fig.align="center", fig.pos="H"}
@@ -91,6 +96,15 @@ Vnos posodobiš podobno, kot delaš nov vnos: izpolniš oz. popraviš ustrezna p
 knitr::include_graphics("08.png")
 ```
 
+# Brisanje vnosa
+
+Možno je tudi brisanje vnosa - npr. v primeru, da si vnesel podatke za napačen datum. V tem primeru se spet s pomočjo koledarja postavi na vnos, ki ga želiš zbrisati in klikni na gumb spodaj desno `Izbriši vnos`. Aplikacija te bo še enkrat vprašala, če si prepričan. 
+
+Brisanje vnosa pomeni, da za ta datum ni več aktivnega vnosa, torej se v poročilih ne bo pojavil, toda na bazi bo vedno shranjena celotna zgodovina popravkov in brisanj. 
+
+```{r, fig.cap="Brisanje vnosa", out.width="45%", fig.align="center", fig.pos="H"}
+knitr::include_graphics("12.png")
+```
 
 # Spreminjanje gesla
 
@@ -101,7 +115,7 @@ Na drugem zavihku imaš polja za spremembo gesla.^[Če slučajno pozabiš novo g
 knitr::include_graphics("09.png")
 ```
 
-# Priprava poročila * - ta funkcija je še v razvoju
+# Priprava poročila
 
 Na tretjem zavihku imaš možnost priprave poročila za izbrano obdobje. Vsak zaposleni lahko pripravi poročilo za svoje vnose, vodje sektorjev in administratorji pa lahko pripravijo tudi posebna poročila za svoj sektor oz. za vnos v Špico.
 

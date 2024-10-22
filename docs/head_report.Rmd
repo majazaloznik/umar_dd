@@ -6,9 +6,9 @@ output:
     includes:
       in_header: footer.tex
 params:
-  start_date: !r Sys.Date() - 21
+  start_date: !r Sys.Date() - 7
   end_date: !r Sys.Date()
-  sector: 7    
+  sector: 6    
 ---
 
 ```{r setup, include=FALSE}
@@ -73,7 +73,7 @@ WHERE id = ANY($1::int[]);
 "
 employee_names <- DBI::dbGetQuery(conn, query, params = list(employee_ids_array))
 
-data <- raw_data  |> 
+final <- raw_data  |> 
         filter(is_current == TRUE) |> 
         select(user_id, date, tasks) |> 
         left_join(employee_names, by = c("user_id"="id")) |> 
@@ -94,13 +94,13 @@ DBI::dbDisconnect(conn)
 
 
 ```{r, results='asis'}
-if(nrow(data) > 0) {
-        head_report_table <- kable(data[,-1], format = "latex", escape = FALSE, booktabs = TRUE, longtable = TRUE) |>
-             kable_styling(latex_options = c("hold_position", "repeat_header", "striped"),
-                    repeat_header_text = "\\emph{(Nadaljevanje tabele)}",
-    repeat_header_method = "replace") |> 
-        pack_rows(index = table(fct_inorder(data$Ime))) |> 
-         row_spec(0, bold = TRUE)
+if(nrow(final) > 0) {
+        head_report_table <- kable(final[,-1], format = "latex", escape = FALSE, booktabs = TRUE, longtable = TRUE) |>
+                kable_styling(latex_options = c("hold_position", "repeat_header", "striped"),
+                              repeat_header_text = "\\emph{(Nadaljevanje tabele)}",
+                              repeat_header_method = "replace") |> 
+                pack_rows(index = table(fct_inorder(final$Ime))) |> 
+                row_spec(0, bold = TRUE)
         
         head_report_table <- head_report_table |>
                 column_spec(1, width = "3.5cm") |>  # Datum

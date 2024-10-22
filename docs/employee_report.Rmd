@@ -10,7 +10,7 @@ classoption: landscape
 params:
   start_date: !r Sys.Date() - 21
   end_date: !r Sys.Date()
-  user_id: 1
+  user_id: 105
 ---
 
 ```{r setup, include=FALSE}
@@ -70,11 +70,12 @@ suppressPackageStartupMessages(library(hms))
 suppressPackageStartupMessages(library(forcats))
 
 # clean up
+
 final <- data |> 
         mutate_all(linebreak) |>  
         mutate(Datum = format(as.Date(Datum), "%d.%m.%y"),
                across(c(Prihod, Odhod, `Zas. izhod`, `Zas. prihod`, Prisotnost), ~format(as.POSIXct(., format="%H:%M:%S"), "%H:%M"))) |> 
-        tidyr::replace_na(list(Prihod = "", Odhod = "", `Zas. izhod` = "", `Zas. prihod` = "", Prisotnost = "", `Odmor` = "", notes = ""))
+        tidyr::replace_na(list(Prihod = "", Odhod = "", `Zas. izhod` = "", `Zas. prihod` = "", Prisotnost = "", `Odmor` = "", notes = "")) 
 
 # generate the admin report table
 if(nrow(final) > 0) {
