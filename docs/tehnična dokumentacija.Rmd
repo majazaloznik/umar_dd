@@ -1,0 +1,349 @@
+---
+title: "Tehnična dokumentacija za aplikacijo Špička"
+author: "mz"
+output:
+        pdf_document:
+                latex_engine: xelatex
+                includes:
+                        in_header: footer-tehdok.tex
+---
+
+
+## 1. Uvod
+
+### 1.1. Namen
+Namen aplikacije Špička je racionalizacija elektronskega oddajanja poročil o delu od doma za zaposlene na Umarju. 
+
+To vključuje vnos opravljenih delovnih ur in nalog. Pred tem se je poročanje izvajalo z uporabo predloge v Wordu in preko e-pošte. Kadrovska služba je nato ročno preverjala podatke in izračunala ure. Aplikacija Špička avtomatizira preverjanje pravilnosti vnosov in poročanje z uvedbo treh vrst poročil.
+
+### 1.2. Obseg
+Ta dokument zajema tehnične vidike aplikacije Špička, vključno z njeno arhitekturo, funkcionalnostjo, tehničnimi specifikacijami, varnostnimi ukrepi, uvedbo in učinkovitostjo delovanja. Dokument ne vsebuje podrobnih uporabniških navodil ali izobraževalnih gradiv.
+
+### 1.3. Ciljna publika
+Ciljna publika te tehnične dokumentacije vključuje:
+
+- Razvijalce, odgovorne za vzdrževanje in nadgradnjo aplikacije
+- IT osebje, vključeno v podporo aplikaciji
+
+## 2. Pregled sistema
+
+### 2.1. Arhitektura
+Aplikacija Špička sledi arhitekturi odjemalec-strežnik z naslednjimi glavnimi komponentami:
+
+- Aplikacija Shiny: Uporabniški vmesnik na čelni strani in logika aplikacije, zgrajena z uporabo ogrodja Shiny v R.
+- Podatkovna baza PostgreSQL: Zaledni podatkovni sistem za shranjevanje in pridobivanje podatkov aplikacije.
+
+Aplikacija Shiny komunicira s podatkovno bazo PostgreSQL za shranjevanje in pridobivanje podatkov, povezanih z zaposlenimi, vnosi delovnega časa in poročili.
+
+### 2.2. Komponente
+
+#### 2.2.1. Aplikacija Shiny
+Aplikacija Shiny, zgrajena z uporabo ogrodja Shiny v R, je odgovorna za upodabljanje uporabniškega vmesnika, obravnavanje uporabniških interakcij in komunikacijo s podatkovno bazo PostgreSQL. Glavne komponente aplikacije Shiny vključujejo:
+
+- Uporabniški vmesnik: Določa postavitev in vizualne elemente aplikacije. Uporabniški vmesnik je zgrajen z uporabo funkcij `Shiny`, kot so `fluidPage`, `tabsetPanel`, `fluidRow` itd.
+- Strežniška logika: Upravlja z odzivi na uporabniške vnose, izvaja poslovne logike in komunicira s podatkovno bazo. Strežniška logika je implementirana v funkciji strežnika v aplikaciji Shiny.
+- Komunikacija s podatkovno bazo: Aplikacija Shiny uporablja `R` knjižnico `RPostgres` za povezovanje in interakcijo s podatkovno bazo PostgreSQL. SQL poizvedbe se uporabljajo za pridobivanje in manipulacijo podatkov.
+
+#### 2.2.2. Podatkovna baza PostgreSQL
+Podatkovna baza PostgreSQL služi kot trajna shramba za podatke aplikacije. Ključne tabele v podatkovni bazi vključujejo:
+
+- `employees`: Hrani informacije o zaposlenih, vključno z njihovimi prijavnimi podatki, delovnim časom in dodeljenimi sektorji.
+- `time_entries`: Hrani vnose delovnega časa, ki so jih poslali zaposleni, vključno s podrobnostmi o opravljenih nalogah.
+- `sectors`: Hrani informacije o različnih sektorjih v organizaciji in zaposlenih, povezanih z vsakim sektorjem.
+
+Aplikacija Shiny komunicira s podatkovno bazo PostgreSQL z uporabo `R` knjižnice `RPostgres`, ki omogoča izvajanje poizvedb SQL za pridobivanje in manipulacijo podatkov.
+
+### 2.3. Uporabniške vloge in nadzor dostopa
+Aplikacija Špička podpira naslednje uporabniške vloge:
+
+- Navadni uporabniki: Zaposleni, ki lahko vnašajo svoj delovni čas in opravljene naloge in pripravijo svoje poročilo
+- Vodje sektorjev: Uporabniki z dodatno možnostjo priprave poročila vodje za svoj sektor
+- Administratorji (HR osebje): Uporabniki z dodatno možnostjo priprave poročila za celotnen urad za namene vnosa v Špico. 
+Nadzor dostopa se izvaja preko avtentikacije uporabnikov, kjer se uporabniško ime in geslo preverjata glede na tabelo "employees" v podatkovni bazi. Uporabniškim vlogam so dodeljene določene pravice znotraj aplikacije glede na njihov atribut "access" v tabeli "employees".
+
+## 3. Funkcionalne zahteve
+
+### 3.1. Avtentikacija uporabnikov
+Aplikacija Špička zahteva, da se uporabniki prijavijo z uporabo svojega uporabniškega imena in gesla. Poverilnice so preverjene glede na tabelo "employees" v podatkovni bazi. Po uspešni prijavi so uporabniki preusmerjeni na ustrezno stran glede na njihovo uporabniško vlogo.
+
+### 3.2. Vnos podatkov
+
+#### 3.2.1. Delovni čas
+Uporabniki lahko vnašajo svoj delovni čas za vsak dan, ko delajo od doma. Aplikacija zagotavlja vnosna polja za začetni čas, končni čas in morebitne odmore med delovnikom. Časi se preverjajo glede na pričakovani delovni čas zaposlenega, ki je določen v tabeli "employees".
+
+#### 3.2.2. Opravljene naloge
+Uporabniki lahko vnesejo opis nalog, ki so jih opravili v delovnem času. Te informacije se shranijo v tabelo "time_entries" skupaj s podatki o delovnem času.
+
+### 3.3. Preverjanje veljavnosti podatkov
+Aplikacija izvaja preverjanje veljavnosti vnesenih podatkov, da zagotovi integriteto in doslednost. To vključuje:
+
+- Preverjanje, ali je začetni čas pred končnim časom
+- Zagotavljanje, da so odmori znotraj delovnega časa
+- Preverjanje formata vnesenih datumov in časov
+- Preverjanje prisotnosti obveznih polj
+
+Preverjanje veljavnosti se izvaja tako na strani odjemalca z uporabo JavaScript-a kot na strani strežnika v logiki aplikacije Shiny.
+
+### 3.4. Poročanje
+
+#### 3.4.1. Vrste poročil
+Aplikacija Špička ustvarja naslednje vrste poročil:
+
+- Poročila o posameznih zaposlenih: Podrobna poročila za vsakega zaposlenega, ki prikazujejo njihov delovni čas in opravljene naloge.
+- Poročila o sektorjih: Poročila za vodje sektorjev, ki vsebujejo agregirane informacije o delovnem času in opravljenih nalogah za njihov sektor.
+- Administratorska poročila: Poročila, posebej zasnovana za administratorje (HR osebje), ki vsebujejo podrobnosti o delovnem času in nalogah za vse zaposlene.
+
+#### 3.4.2. Generiranje poročil
+Poročila se generirajo v formatu PDF z uporabo RMarkdown. Predloge RMarkdown se uporabljajo za določanje postavitve in sloga poročil. Poročila vsebujejo podatke, pridobljene iz podatkovne baze, ki so obdelani in formatirani z uporabo funkcij R in knjižnic, kot so dplyr in knitr.
+
+## 4. Tehnične specifikacije
+
+### 4.1. Uporabljene tehnologije
+
+#### 4.1.1. Programski jezik R
+Aplikacija Špička je razvita z uporabo programskega jezika R, ki je široko uporabljan za statistično računanje in analizo podatkov.
+
+#### 4.1.2. Ogrodje Shiny
+Ogrodje Shiny se uporablja za razvoj interaktivnega spletnega uporabniškega vmesnika aplikacije Špička. Zagotavlja strukture in funkcije za izgradnjo reaktivnih spletnih aplikacij z R.
+
+#### 4.1.3. RMarkdown
+RMarkdown se uporablja za generiranje poročil v formatu PDF. Omogoča ustvarjanje dokumentov, ki združujejo izvorno kodo R, rezultate analize in formatiran tekst.
+
+#### 4.1.4. PostgreSQL
+Za shranjevanje in upravljanje podatkov aplikacije se uporablja sistem za upravljanje relacijskih podatkovnih baz PostgreSQL. Zagotavlja zmogljivo in razširljivo rešitev za shranjevanje strukturiranih podatkov.
+
+### 4.2. Ključne knjižnice in odvisnosti
+Aplikacija Špička uporablja naslednje glavne knjižnice in odvisnosti R:
+
+- shiny: Za izdelavo interaktivnega uporabniškega vmesnika in funkcionalnosti aplikacije.
+- RPostgres: Za povezovanje in interakcijo s podatkovno bazo PostgreSQL iz R.
+- rmarkdown: Za generiranje poročil v formatu PDF z uporabo RMarkdown.
+- dplyr: Za manipulacijo in transformacijo podatkov.
+- ggplot2: Za vizualizacijo podatkov in ustvarjanje grafikonov.
+- (Dodatne knjižnice po potrebi)
+
+### 4.3. Shema podatkovne baze
+Shemo podatkovne baze PostgreSQL za aplikacijo Špička sestavljajo naslednje ključne tabele:
+
+- employees: Hrani podatke o zaposlenih, vključno z njihovimi prijavnimi podatki, delovnim časom in dodeljenimi sektorji.
+
+   - id (primarni ključ)
+   - username
+   - fullname
+   - password
+   - contract_type
+   - arrival_start
+   - arrival_end
+   - departure_start
+   - departure_end
+   - access
+   - sector
+   - created_at
+
+- time_entries: Hrani vnose delovnega časa, ki so jih poslali zaposleni, vključno s podrobnostmi o opravljenih nalogah.
+
+   - id (primarni ključ)
+   - user_id (tuji ključ, ki se sklicuje na tabelo "employees")
+   - date
+   - start_time
+   - end_time
+   - break_start
+   - break_end 
+   - calculated_time
+   - lunch
+   - lunch_mins
+   - tasks
+   - notes
+   - is_current
+   - entry_timestamp
+
+- sectors: Hrani informacije o različnih sektorjih v organizaciji in zaposlenih, povezanih z vsakim sektorjem.
+
+   - id (primarni ključ)
+   - sector_name
+   - employee_ids (polje, ki hrani ID-je zaposlenih, povezanih s sektorjem)
+
+(Po potrebi vključite dodatne tabele in stolpce)
+
+### 4.4. Dokumentacija API
+(Če je primerno, navedite dokumentacijo za vse zunanje ali interne API-je, ki jih uporablja aplikacija.)
+
+## 5. Uporabniški vmesnik
+
+### 5.1. Postavitev in navigacija
+Uporabniški vmesnik aplikacije Špička je organiziran v postavitvi z zavihki z uporabo komponente tabsetPanel. Glavni zavihki vključujejo:
+
+- Vnos in popravki: Omogoča uporabnikom vnos in posodabljanje njihovega delovnega časa in podrobnosti o nalogah.
+- Spremeni geslo: Omogoča uporabnikom spremembo gesla.
+- Poročila: Omogoča generiranje različnih vrst poročil glede na uporabniško vlogo.
+
+
+Navigacija med zavihki je dosežena s klikom na ustrezne naslove zavihkov.
+
+### 5.2. Vnosni obrazci
+Zavihek "Vnos in popravki" vsebuje vnosne obrazce za beleženje delovnega časa in podrobnosti o nalogah. Ključni vnosni elementi vključujejo:
+
+- Izbirnik datuma za izbiro datuma vnosa
+- Vnosna polja za čas za beleženje začetnega časa, končnega časa in odmorov
+- Potrditveno polje za označevanje, ali je bil uporabljen odmor za malico
+- Besedilna območja za vnos opravljenih nalog in dodatnih opomb
+- Gumbi za predložitev vnosa, počiščenje obrazca in brisanje vnosa
+
+Vnosni obrazci vključujejo preverjanje veljavnosti in logiko za odzivanje v realnem času, da uporabnikom pomagajo pri vnosu pravilnih in doslednih podatkov.
+
+### 5.3. Prikaz poročil
+Zavihek "Poročila" omogoča uporabnikom generiranje in ogled poročil glede na njihove dodeljene pravice. Uporabniki lahko izberejo želeni časovni razpon poročila in kliknejo na ustrezen gumb za generiranje poročila.
+
+Generirana poročila se prikažejo v formatu PDF neposredno v uporabniškem vmesniku z uporabo vtičnika PDF.js. Uporabniki lahko poročilo pregledujejo, shranjujejo ali tiskajo po potrebi.
+
+## 6. Varnostni ukrepi
+
+### 6.1. Avtentikacija in avtorizacija
+Aplikacija Špička izvaja avtentikacijo z uporabniškim imenom in geslom. Uporabniške poverilnice so shranjene v tabeli "employees" v podatkovni bazi, pri čemer so gesla zgoščena z uporabo algoritma bcrypt.
+
+Avtorizacija se določi na podlagi atributa "access" vsakega uporabnika, ki je shranjen v tabeli "employees". Atribut "access" določa vlogo uporabnika in s tem povezane pravice znotraj aplikacije.
+
+### 6.2. Varna komunikacija
+Vsa komunikacija med odjemalcem in strežnikom poteka prek varnih protokolov. Aplikacija je postavljena za uporabo protokola HTTPS, ki zagotavlja šifriranje podatkov med prenosom.
+
+### 6.3. Sanitizacija vhodov
+Vsi uporabniški vnosi so ustrezno sanizirani in validirani, da se preprečijo napadi z vrivanjem SQL, XSS in druge varnostne grožnje. Aplikacija uporablja parametre poizvedbe in pripravljene izjave za sanitizacijo vhodov podatkovne baze. Funkcije za čiščenje HTML in filtriranje se uporabljajo za preprečevanje napadov XSS v uporabniškem vmesniku.
+
+### 6.4. Nadzor dostopa
+Dostop do različnih funkcionalnosti aplikacije je omejen glede na dodeljene uporabniške vloge. Pravice dostopa se uveljavljajo tako na strani odjemalca kot na strani strežnika, da se zagotovi ustrezna avtorizacija.
+
+Občutljive operacije, kot so generiranje poročil in upravljanje uporabnikov, so omejene na uporabnike z ustreznimi pravicami (tj. vodje sektorjev in administratorje).
+
+### 6.5. Beleženje in spremljanje
+Aplikacija beleži pomembne dejavnosti in dogodke, kot so prijave uporabnikov, neuspeli poskusi avtentikacije in dostop do kritičnih virov. Dnevniški zapisi se hranijo za namene revizije in nadzora varnosti.
+
+(Navedite dodatne podrobnosti o uporabljenih strategijah beleženja in spremljanja)
+
+## 7. Namestitev in infrastruktura
+
+### 7.1. Zahteve okolja
+Aplikacija Špička zahteva naslednje okolje za delovanje:
+
+- Windows Server (navedite zahtevano različico)
+- R (navedite zahtevano različico)
+- RStudio Server (po želji, za lažji razvoj in vzdrževanje)
+- PostgreSQL (navedite zahtevano različico)
+- (Navedite vse dodatne zahteve glede programske ali strojne opreme)
+
+### 7.2. Postopek namestitve
+
+Za namestitev aplikacije Špička sledite naslednjim korakom:
+1. Namestite potrebno programsko opremo okolja (R, RStudio Server, PostgreSQL) na ciljni strežnik.
+2. Ustvarite podatkovno bazo PostgreSQL za aplikacijo in izvedite priložene skripte SQL za nastavitev zahtevane sheme.
+3. Kopirajte izvorno kodo aplikacije na strežnik v določen imenik.
+4. Namestite potrebne odvisnosti R s premikom v imenik aplikacije in zagonom `install.packages("potrebni-paketi")`.
+5. Konfigurirajte nastavitve aplikacije, kot so podatki o povezavi s podatkovno bazo, v konfiguracijski datoteki aplikacije.
+6. Zaženite aplikacijo z izvajanjem skripte `start_dd_app.R`.
+7. Preizkusite aplikacijo, tako da v spletnem brskalniku obiščete ustrezni naslov URL strežnika in vrata.
+
+(Vključite ukaze, specifične za vaše okolje in postavitev, če je primerno)
+
+### 7.3. Konfiguracija strežnika
+Strežnik, ki gostuje aplikacijo Špička, mora biti ustrezno konfiguriran za optimalno delovanje in varnost. Ključni vidiki konfiguracije strežnika vključujejo:
+
+- Nastavitev požarnega zidu za omejevanje dostopa do potrebnih vrat (npr. 3838 za aplikacijo Shiny)
+- Konfiguracija varnostnih politik, kot je omogočanje samo varnih protokolov (npr. SSH, HTTPS)
+- Dodeljevanje ustreznih sistemskih virov (procesor, pomnilnik, prostor na disku) glede na pričakovano obremenitev
+- Nastavitev rednega varnostnega kopiranja podatkovne baze in ključnih datotek aplikacij
+- (Navedite vse dodatne korake ali nastavitve, specifične za vašo okolje)
+
+### 7.4. Omrežna postavitev
+Aplikacija Špička je dostopna uporabnikom prek omrežja VPN podjetja. VPN zagotavlja varno povezavo med odjemalskimi napravami in omrežjem podjetja.
+
+Uporabniki dostopajo do aplikacije tako, da v svojem spletnem brskalniku vnesejo naslov IP strežnika in določena vrata (privzeto 3838). Zahteve so nato usmerjene na strežnik aplikacij prek omrežne infrastrukture.
+
+(Vključite diagram omrežne postavitve, če je to potrebno za jasnost)
+
+### 7.5. Možne izboljšave namestitve
+
+#### 7.5.1. Namestitev kot Windows storitve
+Namesto ročnega zagona aplikacije prek paketne datoteke se lahko aplikacija Špička namesti kot Windows storitev. To bi omogočilo samodejni zagon aplikacije ob zagonu strežnika in zagotovilo boljši nadzor nad upravljanjem življenjskega cikla aplikacije.
+
+Storitev se lahko implementira z uporabo orodja, kot je NSSM (Non-Sucking Service Manager), ki poenostavlja postopek ustvarjanja in upravljanja Windows storitev za aplikacije, kot je Shiny.
+
+(Navedite korake ali vire za implementacijo aplikacije kot Windows storitve)
+
+## 7.6. Konfiguracija DNS
+
+Za lažji dostop do aplikacije Špička je bil na strežniku nastavljen DNS (Domain Name System) zapis. Namesto neposredne uporabe IP naslova strežnika lahko uporabniki do aplikacije dostopajo preko prijaznega domenskega imena.
+Naslednji DNS zapis je bil dodan v konfiguracijo DNS strežnika:
+
+Domensko ime: `spicka.umar.local`
+Tip zapisa: A (Address)
+IP naslov: `192.169.38.21`
+
+Z uporabo tega DNS zapisa lahko uporabniki dostopajo do aplikacije Špička tako, da v spletni brskalnik vnesejo naslov `spicka.umar.local:3838`. DNS strežnik bo razrešil domensko ime v ustrezen IP naslov strežnika in zahtevo usmeril na aplikacijo Špička, ki teče na določenih vratih (3838).
+Prednosti uporabe DNS zapisa vključujejo:
+
+Lažji dostop: Uporabniki si lažje zapomnijo in vnesejo prijazno domensko ime namesto IP naslova.
+Boljša prenosljivost: Če se IP naslov strežnika spremeni, je treba posodobiti samo DNS zapis, uporabniki pa lahko še vedno dostopajo do aplikacije z uporabo istega domenskega imena.
+Večja fleksibilnost: DNS zapisi omogočajo enostavno premikanje aplikacije na drug strežnik ali postavitev z minimalnimi motnjami za končne uporabnike.
+
+Skrbniki DNS morajo zagotoviti, da je DNS zapis pravilno konfiguriran in da se redno posodablja, da odraža morebitne spremembe omrežne infrastrukture.
+
+
+## 8. Vzdrževanje in podpora
+
+### 8.1. Spremljanje delovanja
+Redno se izvajajo ključni kazalniki učinkovitosti delovanja (KPI) aplikacije Špička za zagotovitev njenega nemotenega delovanja. Ključne metrike vključujejo:
+
+- Čas odzivnosti strežnika in latenca
+- Uporaba sistemskih virov (procesor, pomnilnik, disk I/O)
+- Stopnje napak in izjeme
+- Število sočasnih uporabnikov
+
+(Navedite uporabljena orodja ali storitve za spremljanje, kot so Nagios, Prometheus ali Application Insights)
+
+### 8.2. Beleženje in odpravljanje napak
+Aplikacija Špička zapisuje podrobne dnevniške zapise za lažje odpravljanje napak in preiskovanje težav. Dnevniki vključujejo informacije o napakah, opozorilih, sledenju sklada in ključnih operacijah.
+
+Dnevniški zapisi se shranjujejo na označeni lokaciji na strežniku in se redno pregledujejo za morebitne težave. V nujnih primerih se nastavijo opozorila, da tehnično ekipo obvestijo o kritičnih napakah ali izjemah.
+
+(Navedite vse dodatne podrobnosti o strategiji beleženja in postopku obravnavanja dnevnikov)
+
+### 8.3. Načrt za okrevanje po nesreči
+Da bi se minimalizirala izguba podatkov in čas izpada v primeru katastrofalne napake, aplikacija Špička sledi načrtu za okrevanje po nesreči. Ključni elementi načrta vključujejo:
+
+- Redne popolne in prirastne varnostne kopije podatkovne baze
+- Asinhrono replikacijo podatkovne baze na sekundarno lokacijo
+- Varnostno kopiranje izvorne kode aplikacije in konfiguracijskih datotek
+- Dokumentirane postopke za obnovitev aplikacije iz varnostne kopije
+- Preizkušanje postopkov obnovitve v načrtovanih intervalih
+
+(Navedite svoje posebne zahteve, lokacije hrambe varnostnih kopij, pogostost in postopke testiranja)
+
+## 9. Nadaljnje izboljšave
+
+### 9.1. Uporabniški vmesnik
+- Izvajanje odzivnega oblikovanja za boljšo mobilno izkušnjo
+- Izboljšanje vizualne privlačnosti in uporabnosti obrazcev in poročil
+- Uvedba podpore za več jezikov za mednarodne uporabnike
+- (Navedite vse dodatne izboljšave uporabniškega vmesnika na podlagi povratnih informacij uporabnikov)
+
+### 9.2. Funkcionalnost
+- Integracija z zunanjimi sistemi za upravljanje človeških virov za sinhronizacijo podatkov o zaposlenih
+- Dodajanje možnosti za ustvarjanje in upravljanje nalog na ravni sektorjev ali oddelkov
+- Izvajanje funkcij obveščanja, da se zaposleni spomnijo na vnos svojih ur
+- (Navedite vse dodatne funkcije, ki jih je treba dodati na podlagi poslovnih potreb)
+
+### 9.3. Zmogljivost in razširljivost
+- Implementacija predpomnilnika na strani strežnika za izboljšanje časov odzivnosti
+- Porazdeljevanje komponent podatkovne baze na več strežnikov za boljšo razširljivost
+- Uporaba tehnik skaliranja, kot so izenačevanje obremenitve in replikacija strežnika
+- (Opredelite strategije za reševanje pričakovanih izzivov glede zmogljivosti ali razširljivosti)
+
+### 9.4. Varnost
+- Implementacija dvofaktorske avtentikacije za dodatno plast varnosti
+- Šifriranje občutljivih podatkov v mirovanju za zaščito pred nepooblaščenim dostopom
+- Izvajanje rednega varnostnega pregledovanja in preizkušanja penetracije za odkrivanje ranljivosti
+- (Opredelite dodatne varnostne izboljšave na podlagi najboljših praks stroke in standardov)
+
+## 10. Zaključek
+Ta tehnična dokumentacija podrobno opisuje arhitekturo, funkcionalnosti, tehnične specifikacije, varnostne premisleke, postopke postavitve in načrte za prihodnje izboljšave aplikacije Špička. Služi kot celovita referenca za razvojno ekipo, osebje za IT podporo in druge deležnike, ki sodelujejo v življenjskem ciklu aplikacije.
+
+Dokumentacija se bo sčasoma posodabljala, da bo odražala morebitne spremembe ali izboljšave aplikacije. Vprašanja ali predloge v zvezi z vsebino tega dokumenta naslovite na glavnega razvijalca ali lastnika aplikacije.
