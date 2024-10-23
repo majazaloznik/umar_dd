@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = FALSE)
 
 Namen aplikacije Špička je racionalizacija elektronskega oddajanja poročil o delu od doma za zaposlene na Umarju. 
 
-Špička je dostopna preko brskalnika na povezavi [http://spicka.umar.local:3838](http://spicka.umar.local:3838). 
+Špička je dostopna preko brskalnika na povezavi [http://spicka.umar.local:3838](http://spicka.umar.local:3838) - oz. od doma morate (zaenkrat) [http://192.168.38.21:3838](http://192.168.38.21:3838)
 
 **Deluje samo, če si prijavljen v HKOM**.
 

@@ -192,7 +192,7 @@ ui <- fluidPage(
         tags$footer(
                 tags$hr(),
                 tags$p(
-                        "Špička\U2122 - 2024 - App Version: 1.1.2", 
+                        "Špička\U2122 - 2024 - App Version: 1.2.0", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
                 )
         )
@@ -737,7 +737,7 @@ server <- function(input, output, session) {
                 if ( total_time < contract_hours/2 & input$lunch) {
                         print("malica")
                         showModal(modalDialog(
-                                title = "Nisi upravičen do odmora za malico",
+                                title = "Nisi upravičen/a do odmora za malico",
                                 paste("Delal/a si manj kot polovico ur, zato moraš izbrisati kljukico za odmor med delovnim časom pred oddajo."),
                                 footer = modalButton("Razumem"),
                                 easyClose = TRUE
