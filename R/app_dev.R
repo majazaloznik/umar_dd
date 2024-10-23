@@ -6,7 +6,7 @@ suppressPackageStartupMessages(library(lubridate))
 suppressPackageStartupMessages(library(shinyTime))
 suppressPackageStartupMessages(library(hms))
 suppressPackageStartupMessages(library(shinyjs))
-
+suppressPackageStartupMessages(library(magrittr))
 Sys.setenv(TZ = "Europe/Ljubljana")
 
 # Database connection function
@@ -239,7 +239,7 @@ server <- function(input, output, session) {
                 user_credentials <- authenticate(input$username, input$password)
                 if (user_credentials$user_auth) {
                         credentials(user_credentials)
-                        just_logged_in(TRUE)  
+                        just_logged_in(TRUE) 
                 } else {
                         showModal(modalDialog(
                                 title = "Napaka pri prijavi",
@@ -734,8 +734,18 @@ server <- function(input, output, session) {
                                       "6" = 22.5,
                                       "4" = 15,
                                       0)
+                if ( total_time < contract_hours/2 & input$lunch) {
+                        print("malica")
+                        showModal(modalDialog(
+                                title = "Nisi upravičen do odmora za malico",
+                                paste("Delal/a si manj kot polovico ur, zato moraš izbrisati kljukico za odmor med delovnim časom pred oddajo."),
+                                footer = modalButton("Razumem"),
+                                easyClose = TRUE
+                        ))
+                        return()
+                }
                 
-                if (input$lunchDuration > max_allowed) {
+                if (input$lunchDuration > max_allowed & input$lunch) {
                         showModal(modalDialog(
                                 title = "Opozorilo: Predolg odmor",
                                 paste("Obseg izrabe odmora (", input$lunchDuration, " minut) presega dovoljeno vrednost (", max_allowed, " minut).",
@@ -1182,9 +1192,9 @@ server <- function(input, output, session) {
                 updateTextInput(session, "breakEnd", value = "")
                 updateTextAreaInput(session, "tasks", value = "")
                 updateTextAreaInput(session, "notes", value = "")
-                if (is.null(input$lunch)) {
+                #if (is.null(input$lunch) ) {
                         updateCheckboxInput(session, "lunch", value = TRUE)
-                }
+                #}
                 req(credentials())
                 contract_hours <- credentials()$contract_type
                 default_value <- switch(as.character(contract_hours),
@@ -1202,14 +1212,17 @@ server <- function(input, output, session) {
                 
         }
         
-        # observeEvent(input$selectDate, {
-        #         req(input$selectDate != "", input$tabs == "View Submissions")
-        #         get_entry_details(input$selectDate, update_form = TRUE)
-        # })
         
         observeEvent(input$change_password, {
                 req(credentials())
+                # Disable the button immediately
+                shinyjs::disable("change_password")
                 
+                # Reset the button after 3 seconds (whether the operation succeeds or fails)
+                on.exit({
+                        Sys.sleep(1)  # Optional delay before re-enabling
+                        shinyjs::enable("change_password")
+                })
                 if (input$new_password != input$confirm_password) {
                         showModal(modalDialog(
                                 title = "Napaka: napačno geslo",
@@ -1239,7 +1252,17 @@ server <- function(input, output, session) {
                 result <- safe_db_query(update_query, list(input$new_password, credentials()$user_id), fetch = FALSE)
                 
                 if (!is.null(result)) {
-                        showNotification("Geslo uspešno posodobljeno", type = "message", duration = 8)
+                        showModal(modalDialog(
+                                title = "Sprememba gesla",
+                                "Geslo uspešno posodobljeno.",
+                                footer = modalButton("Kul"),
+                                easyClose = TRUE
+                        ))
+                        
+                        updateTextInput(session, inputId = "current_password", value = "")
+                        updateTextInput(session, inputId = "new_password", value = "")
+                        updateTextInput(session, inputId = "confirm_password", value = "")
+                        
                 } else {
                         showNotification("Napaka pri posodabljanju gesla. Prosim poskusi kasneje.", type = "error")
                 }
@@ -1267,10 +1290,10 @@ server <- function(input, output, session) {
                         cat(paste("Log rotated at", Sys.time(), "\n"))
                 }
         }
-        observe({
-                invalidateLater(36000000)  # 5 minutes in milliseconds
-                rotate_log(log_file)
-        })
+        # observe({
+        #         invalidateLater(36000000)  # 5 minutes in milliseconds
+        #         rotate_log(log_file)
+        # })
 }
 
 shinyApp(ui, server)
