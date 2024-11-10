@@ -192,7 +192,7 @@ ui <- fluidPage(
         tags$footer(
                 tags$hr(),
                 tags$p(
-                        "Špička\U2122 - 2024 - App Version: 1.2.0", 
+                        "Špička\U2122 - 2024 - App Version: 1.2.1", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
                 )
         )
@@ -315,19 +315,19 @@ server <- function(input, output, session) {
                                                     uiOutput("calculatedWorkTime")
                                                 ),
                                                 br(),
-                                                actionButton("submit", "Oddaj/posodobi", width = "100%"),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                actionButton("submit", "Oddaj/posodobi", width = "100%", 
+                                                             style="background-color:  #ced4da"),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                br(),
                                                 br(),
                                                 br(),
                                                 actionButton("clear", "Počisti polja", width = "100%"),
-                                                br(),
-                                                br(),
-                                                br(),
-                                                br(),
-                                                br(),
-                                                br(),
-                                                br(),
-                                                br(),
-                                                br(),
                                                 br(),
                                                 br(),
                                                 actionButton("delete", "Izbriši vnos", width = "100%", 
@@ -649,7 +649,7 @@ server <- function(input, output, session) {
                 if (is.null(input$date) || is.na(input$date)) {
                         showModal(modalDialog(
                                 title = "Napaka: Neveljaven datum",
-                                "Prosim, izberi veljaven datum.",
+                                "Prosim, izberite veljaven datum.",
                                 footer = modalButton("Razumem"),
                                 easyClose = TRUE
                         ))
@@ -662,7 +662,7 @@ server <- function(input, output, session) {
                 if (start_time == "00:00:00" || end_time == "00:00:00" || start_time >= end_time) {
                         showModal(modalDialog(
                                 title = "Napaka: Neveljaven čas",
-                                "Prosim, vnesi veljaven čas začetka in konca. Čas konca mora biti po času začetka.",
+                                "Prosim, vnesite veljaven čas začetka in konca. Čas konca mora biti po času začetka.",
                                 footer = modalButton("Razumem"),
                                 easyClose = TRUE
                         ))
@@ -796,7 +796,7 @@ server <- function(input, output, session) {
                 } else {
                         showModal(modalDialog(
                                 title = "Potrdi izbris",
-                                "Ali si prepričan/a, da hočeš izbrisati ta vnos?",
+                                "Ali si prepričan, da hočeš izbrisati ta vnos?",
                                 footer = tagList(
                                         modalButton("Prekliči"),
                                         actionButton("confirmDelete", "Izbriši", class = "btn-danger")
@@ -819,7 +819,7 @@ server <- function(input, output, session) {
                         clearForm(session)
                         entry_update(entry_update() + 1)  # Trigger update of View/Edit tab
                 } else {
-                        showNotification("Napaka pri brisanju vnosa. Poskusi še enkrat ali pa pokliči Majo Z.", type = "error")
+                        showNotification("Napaka pri brisanju vnosa. Poskusite znova.", type = "error")
                 }
         })
         render_admin_report <- function(start_date, end_date) {

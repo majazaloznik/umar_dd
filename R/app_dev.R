@@ -192,7 +192,7 @@ ui <- fluidPage(
         tags$footer(
                 tags$hr(),
                 tags$p(
-                        "Špička\U2122 - 2024 - App Version: 1.2.0", 
+                        "Špička\U2122 - 2024 - App Version: 1.2.1", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
                 )
         )
@@ -315,19 +315,19 @@ server <- function(input, output, session) {
                                                     uiOutput("calculatedWorkTime")
                                                 ),
                                                 br(),
-                                                actionButton("submit", "Oddaj/posodobi", width = "100%"),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                actionButton("submit", "Oddaj/posodobi", width = "100%", 
+                                                             style="background-color:  #ced4da"),
+                                                br(),
+                                                br(),
+                                                br(),
+                                                br(),
                                                 br(),
                                                 br(),
                                                 actionButton("clear", "Počisti polja", width = "100%"),
-                                                br(),
-                                                br(),
-                                                br(),
-                                                br(),
-                                                br(),
-                                                br(),
-                                                br(),
-                                                br(),
-                                                br(),
                                                 br(),
                                                 br(),
                                                 actionButton("delete", "Izbriši vnos", width = "100%", 
