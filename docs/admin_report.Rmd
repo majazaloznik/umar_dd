@@ -81,10 +81,20 @@ dbDisconnect(conn)
 suppressPackageStartupMessages(library(knitr))
 suppressPackageStartupMessages(library(kableExtra))
 suppressPackageStartupMessages(library(hms))
+suppressPackageStartupMessages(library(lubridate))
 suppressPackageStartupMessages(library(forcats))
 
 
 calculated_hours_background <- ifelse(!is.na(data$contractType) & !is.na(data$Prisotnost) & data$contractType >  as.numeric(as_hms(data$Prisotnost))/3600, "#D46565", ifelse(!is.na(data$contractType) & !is.na(data$Prisotnost) & as.numeric(as_hms(data$Prisotnost))/3600 > data$contractType, "#D46565","black"))
+
+data <- data |> 
+        mutate(friday = !is.na(data$Datum) & wday(data$Datum) == 6 ) |> 
+        mutate(departureStart = if_else(friday & contractType == 8,
+                                        hms::as_hms(as.numeric(departureStart) - 30 * 60),
+                                        departureStart),
+               departureEnd = if_else(friday & contractType == 8,
+                                      hms::as_hms(as.numeric(departureEnd) - 60 * 60),
+                                      departureEnd))
 
 start_time_background <- ifelse(!is.na(data$Prihod) & !is.na(data$arrivalStart) & !is.na(data$arrivalEnd) & (data$Prihod < data$arrivalStart | data$Prihod > data$arrivalEnd),
                                 "#D46565", "black")
@@ -100,7 +110,7 @@ lunch_background <- ifelse(!is.na(data$Odmor) & !is.na(data$odmor_check) & (data
 # Remove unwanted columns
 final <- data |> 
         select(-contractType, -arrivalStart, -arrivalEnd, 
-               -departureStart, -departureEnd, -lunch, -odmor_check) |> 
+               -departureStart, -departureEnd, -lunch, -odmor_check, -friday) |> 
         mutate_all(linebreak) |>  
         mutate(Datum = format(as.Date(Datum), "%d.%m.%y"),
                across(c(Prihod, Odhod, `Zas. izhod`, `Zas. prihod`, Prisotnost), ~format(as.POSIXct(., format="%H:%M:%S"), "%H:%M")),
