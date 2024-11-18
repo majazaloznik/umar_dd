@@ -192,7 +192,7 @@ ui <- fluidPage(
         tags$footer(
                 tags$hr(),
                 tags$p(
-                        "Špička\U2122 - 2024 - App Version: 1.2.1", 
+                        "Špička\U2122 - 2024 - App Version: 1.2.2", 
                         style = "text-align: center; font-size: 0.8em; color: #888;"
                 )
         )
@@ -293,8 +293,8 @@ server <- function(input, output, session) {
                                                                div(style = "margin-top: 20px;",
                                                                    dateInput("date", "Datum", value = NULL, weekstart = 1, format = "dd.mm.yyyy", daysofweekdisabled = c(0, 6), language = "sl"),
                                                                    timeInput("startTime", "Prihod na delo", value = "", seconds = FALSE),
-                                                                   timeInput("endTime", "Odhod z dela", value = "", seconds = FALSE),                                                               timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
-                                                                   timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE, minute.steps = 5),
+                                                                   timeInput("endTime", "Odhod z dela", value = "", seconds = FALSE),                                                               timeInput("breakStart", "Začetek privatnega izhoda (ne malice)", value = "", seconds = FALSE),
+                                                                   timeInput("breakEnd", "Konec privatnega izhoda (ne malice)", value = "", seconds = FALSE),
                                                                    hr(),
                                                                    uiOutput("entryHistory")
                                                                )),
@@ -505,8 +505,9 @@ server <- function(input, output, session) {
                         total_time <- total_time - break_time
                 }
                 
-                total_hours <- floor(total_time)
-                total_minutes <- round((total_time - total_hours) * 60)
+                total_minutes <- round(total_time * 60)
+                total_hours <- floor(total_minutes / 60)
+                remaining_minutes <- total_minutes %% 60
                 
                 # Get the user's contract hours
                 contract_hours <- credentials()$contract_type
@@ -516,7 +517,7 @@ server <- function(input, output, session) {
                 else if (total_time < contract_hours) "#f5d16c" 
                 else "#add8e6"
                 
-                list(time = sprintf("%02d:%02d", total_hours, total_minutes), color = color)
+                list(time = sprintf("%02d:%02d", total_hours, remaining_minutes), color = color)
         })
         
         output$calculatedWorkTime <- renderUI({
