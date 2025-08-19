@@ -1,0 +1,57 @@
+---
+title: "Špička™ - spremembe zaposlenih"
+subtitle: "Navodila za vzdrževanje tabele zaposlenih"
+output:
+        pdf_document:
+                latex_engine: xelatex
+                extra_dependencies: ["float"]
+                includes:
+                        in_header: footer-navodila-update.tex
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+# Namen
+
+Ta navodila so namenjena informatiku (Peter H.) in kadrovski (Vesna L.), da lahko samostojno posodobita tabelo zaposlenih na bazi, ki je podlaga za delovanje aplikacije za oddajanje poročil o delu od doma, znane tudi kot Špička™.
+
+# Postopek
+
+V mapi `O:\Avtomatizacija\umar-automation-scripts\data\spicka` se nahaja Excel datoteka, ki je podalga za tabelo na bazi. V tej tabeli je potrebno narediti želene spremembe, datoteko shraniti in zapreti ter na `umar-bi` strežniku pognati task z imenom `spicka-posodobitev_tabele_zaposlenih`. 
+
+## Podroben postopek
+
+Odpri datoteko v mapi `O:\Avtomatizacija\umar-automation-scripts\data\spicka`. ^[Gre za prirejeno kopijo tabele na bazi, tako da v njej niso vidna gesla uporabnikov. Poleg tega je zaklenjen prvi stolpec z ID številko. ]
+
+Če želiš narediti spremembo pri obstoječem zaposlenem imaš naslednje opcije:
+
+1. Sprememba imena in/ali priimka: celoten priimek mora biti z VELIKIMI ZAČETNICAMI, ime pa Normalno. Če spremeniš ime ali priimek, se uporabniško ime NE BO spremenilo. 
+2. Sprememba uporabniškega imena: na željo zaposlenega lahko spremeniš uporabniško ime. To naj bo brez presledkov in brez posebnih znakov kot so čšž-ji. 
+3. Sprememba sektorja: sektor mora biti popolnoma pravilno napisan, najboljše, da skopiraš iz enega obstoječega vnosa
+4. Sprememba tipa pogodbe: dovoljene vrednosti so 4, 6 in 8. 
+5. Sprememba dovoljenih ur prihoda in odhoda: uporabljaj format `08:00:00` ali `08:00` in glej, da so ure logično pravilno po vrsti.
+6. Sprememba tipa zaposlenega (polje `access`): možne vrednosti so *zaposlen*, *vodja* (kar pomeni, da si lahko izpiše tudi poročilo svojega sektorja) in *admin* (kar pomeni, da si lahko izpiše poročilo vseh zaposlenih)
+
+Če želiš dodati novega zaposlenega:
+
+1. ID pusti prazen, ta se bo sam vpisal po vnosu na bazo. 
+2. Uporabniško ime *lahko pustiš prazno*, v tem primeru se bo uporabniško ime določilo ob vpisu na bazo po istem pravilu kot ostala. Če pa ima uporabnik kako drugačno željo, ga lahko tudi vpišeš. 
+3. V polje `fullname` vpišeš `PRIIMEK Ime` po vzoru ostalih vnosov, torej priimek najprej in z velikimi začetnicami, potem ime normalno. 
+4. Sektor mora biti popolnoma pravilno napisan, najboljše, da skopiraš iz enega obstoječega vnosa
+4. Tip pogodbe: dovoljene vrednosti so 4, 6 in 8. 
+5. Dovoljene ure prihoda in odhoda: uporabljaj format `08:00:00` ali `08:00` in glej, da so ure logično pravilno po vrsti.
+6. Tip zaposlenega (polje `access`): možne vrednosti so *zaposlen*, *vodja* (kar pomeni, da si lahko izpiše tudi poročilo svojega sektorja) in *admin* (kar pomeni, da si lahko izpiše poročilo vseh zaposlenih)
+
+Če želiš izbrisati zaposlenega:
+
+1. To ni mogoče. In niti ni potrebe. 
+
+Ko zaključiš urejanje, shrani datoteko in jo zapri. Naenkrat lahko narediš tudi več sprememb, to ni problem. Ampak moraš pa zapreti datoteko.
+
+Potem mora Peter H. na strežniku `umar-bi` v Task schedulerju pognati `spicka-posodobitev_tabele_zaposlenih`. O rezultatu boste po mailu obveščeni Peter, Vesna in jaz (Maja Z.). Če karkoli ni bilo OK, bo to tudi zapisano v priponki, zato jo vedno poglej. 
+
+Kaj naredi ta skripta? Najprej bo preverila, če so vse spremembe narejene v skladu z zgornjimi pravili. Če je vse OK, bo potem združila zapise v datoteki z zapisi na bazi, tako da posodobi obstoječe zapise in doda potencialne nove. V slednjem primeru bo novim zaposlenim določila ID številko in uporabniško ime. Oboje bo potem zapisala nazaj v Excel datoteko. Na koncu pošlje mail z logom na vse naše naslove.
+
+
+
+

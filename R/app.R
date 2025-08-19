@@ -575,7 +575,8 @@ server <- function(input, output, session) {
                 # Calculate the start of the current week (Monday)
                 start_of_week <- current_date - (current_weekday - 1)
                 
-                # If it's Monday or Tuesday, include the previous week
+                # If it's Monday or Tuesday, include the previous week 
+                # change here by eg adding -7 to extend start date temporarily
                 if (current_weekday <= 2) {
                         start_of_previous_week <- start_of_week - 7
                         start_date <- start_of_previous_week
